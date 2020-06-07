@@ -2,6 +2,10 @@
 
 An easy way to destructure or pattern-match on `Cow`ed structs.
 
+## Concept
+
+See [this gist](https://gist.github.com/5bb57b8bf4bfc08758d9cb557e1fdbfe).
+
 #### License
 
 <sup>
