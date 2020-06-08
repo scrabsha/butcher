@@ -1,3 +1,7 @@
+#![forbid(warnings)]
+
+mod iterator;
+
 #[cfg(test)]
 mod tests {
     #[test]
