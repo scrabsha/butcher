@@ -1,10 +1,24 @@
 ## Butcher
 
-An easy way to destructure or pattern-match on `Cow`ed structs.
+An easy way to interact `Cow`ed structs and enums.
 
 ## Concept
 
+This crate aims to allow allow simple destructuring (for `struct`s), pattern
+matching (for `enum`s and `struct`s) and iteration (for `enum`s and `struct`s
+that implement it).
+
+### Destructuring
+
+TODO
+
+### Pattern matching
+
 See [this gist](https://gist.github.com/5bb57b8bf4bfc08758d9cb557e1fdbfe).
+
+### Iteration
+
+TODO
 
 #### License
 
