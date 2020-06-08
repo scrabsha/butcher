@@ -2,6 +2,11 @@
 
 An easy way to interact `Cow`ed structs and enums.
 
+## Disclaimer
+
+This crate is still in early steps of developpments. It should not be used in
+production.
+
 ## Concept
 
 This crate aims to allow allow simple destructuring (for `struct`s), pattern
