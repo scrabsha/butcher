@@ -1,6 +1,6 @@
 ## Butcher
 
-An easy way to interact `Cow`ed structs and enums.
+An easy way to interact with `Cow`ed structs and enums.
 
 ## Disclaimer
 
@@ -23,7 +23,22 @@ See [this gist](https://gist.github.com/5bb57b8bf4bfc08758d9cb557e1fdbfe).
 
 ### Iteration
 
-TODO
+This crate provide a `CowIter` type, which allows to write `Cow` fiendly
+iterators. See this example:
+
+```
+use std::borrow:Cow;
+use butcher::iterator::CowIter;
+
+fn print_numbers(elems: Cow<[u32]>) {
+    let mut iter = CowIter::from_cow(elems)
+
+    for element in iter {
+        // The type of element is Cow<u32>
+        println!("{:?}", element);
+    }
+}
+```
 
 #### License
 
