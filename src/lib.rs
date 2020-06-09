@@ -1,4 +1,4 @@
-mod iterator;
+pub mod iterator;
 
 #[cfg(test)]
 mod tests {
