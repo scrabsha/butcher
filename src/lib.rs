@@ -1,5 +1,3 @@
-#![forbid(warnings)]
-
 mod iterator;
 
 #[cfg(test)]

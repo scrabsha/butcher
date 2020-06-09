@@ -8,7 +8,7 @@ where
     I: 'a + ToOwned,
     Iterr1: Iterator<Item = &'a I>,
     Iterr2: Iterator<Item = <I as ToOwned>::Owned>,
-    Input: 'a + ToOwned,
+    Input: 'a + ToOwned + ?Sized,
     &'a Input: IntoIterator<Item = &'a I, IntoIter = Iterr1> + ToOwned,
     <Input as ToOwned>::Owned: IntoIterator<Item = <I as ToOwned>::Owned, IntoIter = Iterr2>,
 {
@@ -21,7 +21,7 @@ where
     I: 'a + ToOwned,
     Iterr1: Iterator<Item = &'a I>,
     Iterr2: Iterator<Item = <I as ToOwned>::Owned>,
-    Input: 'a + ToOwned,
+    Input: 'a + ToOwned + ?Sized,
     &'a Input: IntoIterator<Item = &'a I, IntoIter = Iterr1>,
     <Input as ToOwned>::Owned: IntoIterator<Item = <I as ToOwned>::Owned, IntoIter = Iterr2>,
 {
@@ -41,7 +41,7 @@ where
     I: 'a + ToOwned,
     Iterr1: Iterator<Item = &'a I>,
     Iterr2: Iterator<Item = <I as ToOwned>::Owned>,
-    Input: 'a + ToOwned,
+    Input: 'a + ToOwned + ?Sized,
     &'a Input: IntoIterator<Item = &'a I, IntoIter = Iterr1> + ToOwned,
     <Input as ToOwned>::Owned: IntoIterator<Item = <I as ToOwned>::Owned, IntoIter = Iterr2>,
 {
@@ -61,12 +61,36 @@ mod cow_iter {
 
     #[test]
     fn from_cow() {
-        let i = vec![4usize, 1, 3, 5];
-        let mut i = CowIter::from_cow(Cow::Owned(i));
-        assert_eq!(i.next(), Some(Cow::Owned(4)));
-        assert_eq!(i.next(), Some(Cow::Owned(1)));
-        assert_eq!(i.next(), Some(Cow::Owned(3)));
-        assert_eq!(i.next(), Some(Cow::Owned(5)));
-        assert_eq!(i.next(), None);
+        // from_cow is not easy to test.
+        // TODO: explain why
+        todo!();
+    }
+
+    #[test]
+    fn iterator_owned() {
+        let numbers = Cow::Owned(vec![0, 1, 1, 2, 3, 5]);
+        let mut iter = CowIter::<_, [_], _, _>::from_cow(numbers);
+
+        assert_eq!(iter.next(), Some(Cow::Owned(0)));
+        assert_eq!(iter.next(), Some(Cow::Owned(1)));
+        assert_eq!(iter.next(), Some(Cow::Owned(1)));
+        assert_eq!(iter.next(), Some(Cow::Owned(2)));
+        assert_eq!(iter.next(), Some(Cow::Owned(3)));
+        assert_eq!(iter.next(), Some(Cow::Owned(5)));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn iterator_borrowed() {
+        let numbers = Cow::Borrowed(&[0, 1, 1, 2, 3, 5] as &[_]);
+        let mut iter = CowIter::<_, [_], _, _>::from_cow(numbers);
+
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&0)));
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&1)));
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&1)));
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&2)));
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&3)));
+        assert_eq!(iter.next(), Some(Cow::Borrowed(&5)));
+        assert_eq!(iter.next(), None);
     }
 }
