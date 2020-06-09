@@ -38,11 +38,11 @@ This crate provide a `CowIter` type, which allows to write `Cow` fiendly
 iterators. See this example:
 
 ```rust
-use std::borrow:Cow;
+use std::borrow::Cow;
 use butcher::iterator::CowIter;
 
 fn print_numbers(elems: Cow<[u32]>) {
-    let mut iter = CowIter::from_cow(elems)
+    let mut iter = CowIter::from_cow(elems);
 
     for element in iter {
         // The type of element is Cow<u32>
