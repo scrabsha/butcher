@@ -26,7 +26,7 @@ See [this gist](https://gist.github.com/5bb57b8bf4bfc08758d9cb557e1fdbfe).
 This crate provide a `CowIter` type, which allows to write `Cow` fiendly
 iterators. See this example:
 
-```
+```rust
 use std::borrow:Cow;
 use butcher::iterator::CowIter;
 
