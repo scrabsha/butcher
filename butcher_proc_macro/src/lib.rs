@@ -10,6 +10,9 @@ use syn::{
 pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
     let _ = parse_macro_input!(tokens as ButcheredStruct);
 
+    // TODO: check that we are actually destructuring something
+    // TODO: check that there is no repetition
+
     todo!();
 }
 
