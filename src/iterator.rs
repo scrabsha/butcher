@@ -95,6 +95,21 @@ where
     }
 }
 
+impl<'a, Input, I, Iterr1, Iterr2> From<Cow<'a, Input>> for CowIter<'a, I, Input, Iterr1, Iterr2>
+where
+    I: 'a + ToOwned,
+    Iterr1: Iterator<Item = &'a I>,
+    Iterr2: Iterator<Item = <I as ToOwned>::Owned>,
+    Input: 'a + ToOwned + ?Sized,
+    &'a Input: IntoIterator<Item = &'a I, IntoIter = Iterr1> + ToOwned,
+    <Input as ToOwned>::Owned: IntoIterator<Item = <I as ToOwned>::Owned, IntoIter = Iterr2>,
+{
+    // TODO: write a test for this function
+    fn from(input: Cow<'a, Input>) -> Self {
+        CowIter::from_cow(input)
+    }
+}
+
 impl<'a, I, Input, Iterr1, Iterr2> Iterator for CowIter<'a, I, Input, Iterr1, Iterr2>
 where
     I: 'a + ToOwned,
@@ -113,6 +128,39 @@ where
         }
     }
 }
+
+/// Allows to convert any cow containing an iterator into a `CowIter`.
+///
+/// This trait provides better method-chaining, but is just a simple wrapper
+/// for [`CowIter::from_cow`].
+///
+/// [`CowIter::from_cow`]: enum.CowIter.html#method.from_cow
+pub trait IntoCowIterator {
+    type Item: ToOwned;
+    type IntoIter: Iterator;
+
+    fn into_cow_iter(self) -> Self::IntoIter;
+}
+
+impl<'a, Input, I, Iterr1, Iterr2> IntoCowIterator for Cow<'a, Input>
+where
+    I: 'a + ToOwned,
+    Iterr1: Iterator<Item = &'a I>,
+    Iterr2: Iterator<Item = <I as ToOwned>::Owned>,
+    Input: 'a + ToOwned + ?Sized,
+    &'a Input: IntoIterator<Item = &'a I, IntoIter = Iterr1> + ToOwned,
+    <Input as ToOwned>::Owned: IntoIterator<Item = <I as ToOwned>::Owned, IntoIter = Iterr2>,
+{
+    type Item = I;
+    type IntoIter = CowIter<'a, I, Input, Iterr1, Iterr2>;
+
+    // TODO: write a test for this function
+    fn into_cow_iter(self) -> Self::IntoIter {
+        CowIter::from_cow(self)
+    }
+}
+
+
 
 #[cfg(test)]
 mod cow_iter {

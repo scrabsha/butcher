@@ -12,10 +12,10 @@
 //!
 //! ```rust
 //! use std::borrow::Cow;
-//! use butcher::iterator::CowIter;
+//! use butcher::iterator::{CowIter, IntoCowIterator};
 //!
 //! fn print_numbers(elems: Cow<[u32]>) {
-//!     let mut iter = CowIter::from_cow(elems);
+//!     let mut iter = elems.into_cow_iter();
 //!
 //!     for element in iter {
 //!         // The type of element is Cow<u32>
