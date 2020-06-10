@@ -160,8 +160,6 @@ where
     }
 }
 
-
-
 #[cfg(test)]
 mod cow_iter {
     use super::*;
