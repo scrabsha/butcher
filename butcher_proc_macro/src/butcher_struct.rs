@@ -1,9 +1,7 @@
-use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input,
     punctuated::Punctuated,
     Ident, Result, Token,
 };
@@ -15,17 +13,17 @@ pub(super) struct ButcheredStruct {
 }
 
 #[inline]
-fn owned() -> TokenStream2 {
+fn owned() -> TokenStream {
     quote! { std::borrow::Cow::Owned }
 }
 
 #[inline]
-fn borrowed() -> TokenStream2 {
+fn borrowed() -> TokenStream {
     quote! { std::borrow::Cow::Borrowed }
 }
 
 impl ButcheredStruct {
-    pub(super) fn expand_to_code(&self) -> TokenStream2 {
+    pub(super) fn expand_to_code(&self) -> TokenStream {
         let var_name = &self.name;
         let owned_arm = self.owned_arm();
         let borrowed_arm = self.borrowed_arm();
@@ -38,7 +36,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn owned_arm(&self) -> TokenStream2 {
+    fn owned_arm(&self) -> TokenStream {
         let owned = owned();
         let isp = self.inner_struct_pattern();
         let return_expr = self.owned_return_expr();
@@ -48,7 +46,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn owned_return_expr(&self) -> TokenStream2 {
+    fn owned_return_expr(&self) -> TokenStream {
         let variables = self.fields.iter().map(|f| f.expand_to_value());
         let owned = owned();
 
@@ -61,7 +59,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn borrowed_arm(&self) -> TokenStream2 {
+    fn borrowed_arm(&self) -> TokenStream {
         let borrowed = borrowed();
         let isp = self.inner_struct_pattern();
         let return_expr = self.borrowed_return_expr();
@@ -71,7 +69,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn borrowed_return_expr(&self) -> TokenStream2 {
+    fn borrowed_return_expr(&self) -> TokenStream {
         let variables = self.fields.iter().map(Field::expand_to_pattern);
         let borrowed = borrowed();
 
@@ -84,7 +82,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn inner_struct_pattern(&self) -> TokenStream2 {
+    fn inner_struct_pattern(&self) -> TokenStream {
         let variables = self.fields.iter().map(Field::expand_to_pattern);
         let ty = &self.ty;
 
@@ -120,12 +118,12 @@ struct Field {
 }
 
 impl Field {
-    fn expand_to_pattern(&self) -> TokenStream2 {
+    fn expand_to_pattern(&self) -> TokenStream {
         let name = &self.name;
         quote! { #name }
     }
 
-    fn expand_to_value(&self) -> TokenStream2 {
+    fn expand_to_value(&self) -> TokenStream {
         let name = &self.name;
         match self.state {
             FieldState::Normal => quote! { #name },

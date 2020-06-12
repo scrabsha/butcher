@@ -7,3 +7,9 @@ pub trait ButcherField: ToOwned {
 
     fn from_owned(o: Self) -> Cow<'static, Self::Output>;
 }
+
+pub trait Butcher: ToOwned {
+    type Output;
+
+    fn butcher(this: Cow<Self>) -> Self::Output;
+}
