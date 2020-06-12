@@ -1,3 +1,4 @@
 /target
 Cargo.lock
 butcher_proc_macro/target
+butcher_core/target

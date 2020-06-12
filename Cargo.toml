@@ -13,3 +13,4 @@ keywords = ["rust-patterns"]
 
 [dependencies]
 butcher_proc_macro = { path = "butcher_proc_macro" }
+butcher_core = { path = "butcher_core" }
