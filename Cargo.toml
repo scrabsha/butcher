@@ -12,4 +12,4 @@ categories = []
 keywords = ["rust-patterns"]
 
 [dependencies]
-butcher_derive = { path = "butcher_proc_macro" }
+butcher_proc_macro = { path = "butcher_proc_macro" }
