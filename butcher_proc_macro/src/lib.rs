@@ -3,7 +3,7 @@ extern crate proc_macro;
 use crate::butcher_struct::ButcheredStruct;
 
 use proc_macro::TokenStream;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, DeriveInput};
 
 #[cfg(test)]
 macro_rules! assert_eq_tt {
@@ -16,6 +16,7 @@ macro_rules! assert_eq_tt {
 }
 
 mod butcher_struct;
+mod derive_butcher;
 
 #[proc_macro]
 pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
@@ -25,4 +26,11 @@ pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
     // TODO: check that there is no repetition
 
     data.expand_to_code().into()
+}
+
+#[proc_macro_derive(Butcher)]
+pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
+    let data = parse_macro_input!(tokens as DeriveInput);
+
+    todo!();
 }
