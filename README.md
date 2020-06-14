@@ -53,9 +53,11 @@ fn print_numbers(elems: Cow<[u32]>) {
 
 ### Minimum Supported Rust Version
 
-Currently, this crate should compile to any version of `rustc`. However, it is
-planned to use fn-like procedural macros once this feature is avalaible on
-stable rust.
+Currently, this crate requires at least rust toolchain version 1.42. CI is set
+up so that this rule is enforced.
+
+However, it is planned to use procedural macros that expand to expression, which
+will be available in rust version 1.45.
 
 #### License
 
