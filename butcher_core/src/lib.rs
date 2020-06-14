@@ -1,11 +1,12 @@
 use std::borrow::Cow;
 
-pub trait ButcherField: ToOwned {
-    type Output: ToOwned + Sized;
+pub trait ButcherField<'a> {
+    type Input;
+    type Output: ToOwned + Sized + 'a;
 
-    fn from_borrowed(b: &Self) -> Cow<Self::Output>;
+    fn from_borrowed(b: &'a Self::Input) -> Self::Output;
 
-    fn from_owned(o: Self) -> Cow<'static, Self::Output>;
+    fn from_owned(o: Self::Input) -> Self::Output;
 }
 
 pub trait Butcher: ToOwned {
