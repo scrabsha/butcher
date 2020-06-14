@@ -20,6 +20,9 @@ macro_rules! assert_eq_tt {
 }
 
 mod butcher_struct;
+
+// TODO: remove this, actually use this dead code
+#[allow(dead_code)]
 mod derive_butcher;
 
 #[proc_macro]
