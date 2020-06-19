@@ -102,3 +102,37 @@ macro_rules! butcher_struct {
         compile_error!("This non-distructuring is equivalent of a Drop. Use this function instead.");
     }
 }
+
+pub use butcher_proc_macro::*;
+
+pub use butcher_core::ButcherField;
+
+#[cfg(test)]
+mod derive_butcher {
+    use super::*;
+
+    mod r#struct {
+        use super::*;
+
+        #[allow(dead_code)]
+        #[derive(Butcher)]
+        struct Foo<'a, T> {
+            #[butcher(copy)]
+            first: usize,
+            #[butcher(deref, T: Clone)]
+            second: Box<T>,
+            #[butcher(copy)]
+            third: &'a usize,
+            #[butcher(copy, T: Clone)]
+            fourth: T,
+            #[butcher(regular, T: Clone)]
+            fifth: T,
+            #[butcher(as_ref)]
+            sixth: String,
+            #[butcher(copy, T: 'a)]
+            seventh: &'a T,
+            #[butcher(as_ref, T: Clone)]
+            eighth: Vec<T>,
+        }
+    }
+}
