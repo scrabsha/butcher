@@ -12,9 +12,11 @@ use syn::{
     TypeTuple, Visibility,
 };
 
-use quote::{format_ident, quote, ToTokens};
+use quote::{quote, ToTokens};
 
 use proc_macro2::TokenStream;
+
+use crate::utils;
 
 #[derive(Debug, PartialEq)]
 pub enum DeriveError {
@@ -228,7 +230,7 @@ impl Field {
     }
 
     fn associated_struct_name(&self, main_struct_name: &Ident) -> Ident {
-        format_ident!("Butcher{}{}", main_struct_name, self.name)
+        utils::associated_struct_name(main_struct_name, &self.name)
     }
 
     fn associated_lifetimes_in_phantom(&self) -> impl Iterator<Item = impl ToTokens> + '_ {
