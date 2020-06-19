@@ -36,21 +36,19 @@ pub enum DeriveError {
 impl Display for DeriveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DeriveError::FoundUnion => format_args!("Butcher does not support unions"),
-            DeriveError::FoundUnitStruct => format_args!("Butchering is useless for unit structs"),
-            DeriveError::FoundEnum => format_args!(
+            DeriveError::FoundUnion => "Butcher does not support unions",
+            DeriveError::FoundUnitStruct => "Butchering is useless for unit structs",
+            DeriveError::FoundEnum => {
                 "Butcher currently does not support enums. This is planned for next release"
-            ),
-            DeriveError::FoundTupledStruct => {
-                format_args!("Butcher does not currently support tupled structs")
             }
+            DeriveError::FoundTupledStruct => "Butcher does not currently support tupled structs",
             DeriveError::MultipleButcheringMethod => {
-                format_args!("Multiple butchering method provided. Choose one!")
+                "Multiple butchering method provided. Choose one!"
             }
-            DeriveError::FoundImplTrait => format_args!("Butcher does not support impl Trait"),
-            DeriveError::FoundMacroAsType => format_args!("Butcher does not support macro as type"),
-            DeriveError::FoundTraitObject => format_args!("Butcher does not support trait objects"),
-            DeriveError::UnknownMethod => format_args!("Unknown butchering method"),
+            DeriveError::FoundImplTrait => "Butcher does not support impl Trait",
+            DeriveError::FoundMacroAsType => "Butcher does not support macro as type",
+            DeriveError::FoundTraitObject => "Butcher does not support trait objects",
+            DeriveError::UnknownMethod => "Unknown butchering method",
         }
         .fmt(f)
     }
