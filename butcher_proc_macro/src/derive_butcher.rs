@@ -5,11 +5,14 @@ use std::{
 };
 
 use syn::{
+    parse::{Parse, ParseStream},
     AngleBracketedGenericArguments, Attribute, Data, DeriveInput, Fields, GenericArgument,
-    GenericParam, Ident, Meta, MetaList, NestedMeta, PathArguments, QSelf, ReturnType, Type,
-    TypeArray, TypeBareFn, TypeGroup, TypeParen, TypePath, TypePtr, TypeReference, TypeSlice,
+    GenericParam, Ident, Lifetime, PathArguments, QSelf, Result as SynResult, ReturnType, Token,
+    Type, TypeArray, TypeBareFn, TypeGroup, TypeParen, TypePath, TypePtr, TypeReference, TypeSlice,
     TypeTuple, Visibility,
 };
+
+use quote::{format_ident, quote, ToTokens};
 
 use proc_macro2::TokenStream;
 
@@ -25,41 +28,62 @@ pub enum DeriveError {
     FoundImplTrait,
     FoundMacroAsType,
     FoundTraitObject,
-    MethodFoundLitteral,
-    NestedMethod,
     UnknownMethod,
 }
 
 impl Display for DeriveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use DeriveError::*;
-        let to_display = match self {
-            FoundUnion => format_args!("Butcher does not support unions."),
-            FoundUnitStruct => format_args!("Butchering is useless for unit structs."),
-            FoundEnum => format_args!(
-                "Butcher currently does not support enums. This is planned for next release."
+        match self {
+            DeriveError::FoundUnion => format_args!("Butcher does not support unions"),
+            DeriveError::FoundUnitStruct => format_args!("Butchering is useless for unit structs"),
+            DeriveError::FoundEnum => format_args!(
+                "Butcher currently does not support enums. This is planned for next release"
             ),
-            FoundTupledStruct => format_args!("Butcher does not currently support tupled structs."),
-            MultipleButcheringMethod => {
-                format_args!("Multiple butchering method provided. Choose one.")
+            DeriveError::FoundTupledStruct => {
+                format_args!("Butcher does not currently support tupled structs")
             }
-            FoundImplTrait => format_args!("Butcher does not support impl Trait."),
-            FoundMacroAsType => format_args!("Butcher does not support macro as type."),
-            FoundTraitObject => format_args!("Butcher does not support trait objects."),
-            MethodFoundLitteral => {
-                format_args!("Butcher does not support litteral as butchering method.")
+            DeriveError::MultipleButcheringMethod => {
+                format_args!("Multiple butchering method provided. Choose one!")
             }
-            NestedMethod => format_args!("Butcher does not support nested methods."),
-            UnknownMethod => format_args!("Unknown butchering method."),
-        };
-
-        write!(f, "{}", to_display)
+            DeriveError::FoundImplTrait => format_args!("Butcher does not support impl Trait"),
+            DeriveError::FoundMacroAsType => format_args!("Butcher does not support macro as type"),
+            DeriveError::FoundTraitObject => format_args!("Butcher does not support trait objects"),
+            DeriveError::UnknownMethod => format_args!("Unknown butchering method"),
+        }
+        .fmt(f)
     }
 }
 
 type Errors = Vec<syn::Error>;
 
 impl Error for DeriveError {}
+
+#[inline]
+fn cow() -> TokenStream {
+    quote! { std::borrow::Cow }
+}
+
+#[inline]
+fn borrowed() -> TokenStream {
+    let cow = cow();
+    quote! { #cow::Borrowed }
+}
+
+#[inline]
+fn owned() -> TokenStream {
+    let cow = cow();
+    quote! { #cow::Owned }
+}
+
+#[inline]
+fn phantom() -> TokenStream {
+    quote! { std::marker::PhantomData }
+}
+
+#[inline]
+fn butcher_field() -> TokenStream {
+    quote! { ButcherField }
+}
 
 pub(super) struct ButcheredStruct {
     name: Ident,
@@ -83,29 +107,35 @@ impl ButcheredStruct {
         }
         .map_err(|(e, s)| vec![syn::Error::new(s, e)])?;
 
-        let generics = input
-            .generics
-            .params
-            .into_iter()
-            .filter_map(|g| match g {
-                GenericParam::Type(g) => Some(g.ident),
-                GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
-            })
-            .collect::<HashSet<_>>();
+        let mut generic_types = HashSet::new();
+        let mut lifetimes = HashSet::new();
 
-        let (fields, errors) = fields.into_iter().map(|f| Field::from(f, &generics)).fold(
-            (Vec::new(), Vec::new()),
-            |(mut oks, mut errs), res| match res {
-                Ok(v) => {
-                    oks.push(v);
-                    (oks, errs)
-                }
-                Err(e) => {
-                    errs.extend(e);
-                    (oks, errs)
-                }
-            },
-        );
+        input.generics.params.into_iter().for_each(|g| match g {
+            GenericParam::Type(t) => {
+                generic_types.insert(t.ident);
+            }
+            GenericParam::Lifetime(lt) => {
+                lifetimes.insert(lt.lifetime);
+            }
+            GenericParam::Const(_) => {}
+        });
+
+        let (fields, errors) = fields
+            .into_iter()
+            .map(|f| Field::from(f, &generic_types, &lifetimes))
+            .fold(
+                (Vec::new(), Vec::new()),
+                |(mut oks, mut errs), res| match res {
+                    Ok(v) => {
+                        oks.push(v);
+                        (oks, errs)
+                    }
+                    Err(e) => {
+                        errs.extend(e);
+                        (oks, errs)
+                    }
+                },
+            );
 
         if !errors.is_empty() {
             return Err(errors);
@@ -115,7 +145,9 @@ impl ButcheredStruct {
     }
 
     pub(super) fn expand_to_code(self) -> TokenStream {
-        todo!();
+        let fields_expansion = self.fields.iter().map(|f| f.expand_to_code(&self.name));
+
+        quote! { #( #fields_expansion )* }
     }
 }
 
@@ -125,33 +157,18 @@ struct Field {
     vis: Visibility,
     ty: Type,
     associated_generics: Vec<Ident>,
+    associated_lifetimes: Vec<Lifetime>,
+    additional_traits: TokenStream,
 }
 
 impl Field {
-    fn from(input: syn::Field, generics: &HashSet<Ident>) -> Result<Field, Errors> {
-        let methods = input
-            .attrs
-            .iter()
-            .map(ButcheringMethod::try_from)
-            .flatten()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| vec![e])?;
-
-        let (method, errs) = match methods.as_slice() {
-            [method] => (*method, Vec::new()),
-            [] => (ButcheringMethod::Regular, Vec::new()),
-            [.., last] => (
-                *last,
-                vec![syn::Error::new_spanned(
-                    &input,
-                    DeriveError::MultipleButcheringMethod,
-                )],
-            ),
-        };
-
-        if !errs.is_empty() {
-            return Err(errs);
-        }
+    fn from(
+        input: syn::Field,
+        generic_types: &HashSet<Ident>,
+        lifetimes: &HashSet<Lifetime>,
+    ) -> Result<Field, Errors> {
+        let FieldMetadata(method, additional_traits) =
+            parse_meta_attrs(input.attrs.as_slice()).map_err(|e| vec![e])?;
 
         let vis = input.vis;
 
@@ -161,7 +178,16 @@ impl Field {
 
         let ty = input.ty;
 
-        let associated_generics = find_generics_in_type(&ty, generics).map_err(|e| vec![e])?;
+        let mut associated_generics =
+            find_generics_in_type(&ty, generic_types).map_err(|e| vec![e])?;
+        let mut associated_lifetimes =
+            find_lifetimes_in_type(&ty, lifetimes).map_err(|e| vec![e])?;
+
+        associated_generics.sort_unstable();
+        associated_lifetimes.sort_unstable();
+
+        associated_generics.dedup();
+        associated_lifetimes.dedup();
 
         Ok(Field {
             vis,
@@ -169,7 +195,152 @@ impl Field {
             name,
             ty,
             associated_generics,
+            associated_lifetimes,
+            additional_traits,
         })
+    }
+
+    fn expand_to_code(&self, main_struct_name: &Ident) -> TokenStream {
+        let associated_struct = self.associated_struct_declaration(main_struct_name);
+        let associated_trait = self.butcher_field_implementation(main_struct_name);
+
+        quote! {
+            #associated_struct
+            #associated_trait
+        }
+    }
+
+    fn associated_struct_declaration(&self, main_struct_name: &Ident) -> TokenStream {
+        let vis = &self.vis;
+        let struct_with_generics = self.associated_struct_with_generics(main_struct_name);
+
+        let types_in_phantom = self.associated_generics.iter();
+        let lifetimes_in_phantom = self.associated_lifetimes_in_phantom();
+
+        let phantom = phantom();
+
+        quote! {
+            #vis struct #struct_with_generics
+                (
+                    #phantom< ( #( #types_in_phantom, )* ) > ,
+                    #phantom< ( #( #lifetimes_in_phantom, )* ) > ,
+                );
+        }
+    }
+
+    fn associated_struct_with_generics(&self, main_struct_name: &Ident) -> TokenStream {
+        let struct_name = self.associated_struct_name(main_struct_name);
+
+        let lifetimes_declaration = self.associated_lifetimes.as_slice();
+        let generics_declaration = self.associated_generics.as_slice();
+
+        quote! { #struct_name < #( #lifetimes_declaration, )* #( #generics_declaration, )* > }
+    }
+
+    fn associated_struct_name(&self, main_struct_name: &Ident) -> Ident {
+        format_ident!("Butcher{}{}", main_struct_name, self.name)
+    }
+
+    fn associated_lifetimes_in_phantom(&self) -> impl Iterator<Item = impl ToTokens> + '_ {
+        self.associated_lifetimes
+            .iter()
+            .map(|lt| quote! { & #lt () })
+    }
+
+    fn butcher_field_implementation(&self, main_struct_name: &Ident) -> TokenStream {
+        let butcher_field = butcher_field();
+        let struct_with_generics = self.associated_struct_with_generics(main_struct_name);
+        let lt = quote! { 'cow };
+
+        let generic_types = self.associated_generics.as_slice();
+        let lifetimes = self.associated_lifetimes.as_slice();
+
+        let where_clause = self.where_clause_trait(&lt);
+
+        let input_type = self.input_type();
+        let output_type = self.output_type(&lt);
+
+        let borrowed_function = self.method.expand_borrowed_function(&lt);
+        let owned_function = self.method.expand_owned_function();
+
+        quote! {
+            impl
+                <#lt, #( #lifetimes, )* #( #generic_types ),*>
+                #butcher_field<#lt> for #struct_with_generics
+                #where_clause
+            {
+                #input_type
+                #output_type
+
+                #borrowed_function
+                #owned_function
+            }
+        }
+    }
+
+    fn where_clause_trait(&self, lt: &TokenStream) -> TokenStream {
+        let bounds_for_generic_types = self.associated_generics.iter().map(|t| quote! { #t: #lt });
+        let bounds_for_lifetimes = self.associated_lifetimes.iter().map(|l| quote! { #l: #lt });
+        let generics = bounds_for_generic_types.chain(bounds_for_lifetimes);
+        let user_provided_bounds = &self.additional_traits;
+
+        quote! {
+            where
+                #( #generics, )*
+                #user_provided_bounds
+        }
+    }
+
+    fn input_type(&self) -> TokenStream {
+        let ty = &self.ty;
+        quote! { type Input = #ty; }
+    }
+
+    fn output_type(&self, lt: &TokenStream) -> TokenStream {
+        self.method.output_type_for(&self.ty, lt)
+    }
+}
+
+fn parse_meta_attrs(input: &[Attribute]) -> Result<FieldMetadata, syn::Error> {
+    let methods = input
+        .iter()
+        .map(parse_meta_attr)
+        .flatten()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    match methods.as_slice() {
+        [(_, metadata)] => Ok(metadata.clone()),
+        [] => Ok(FieldMetadata(ButcheringMethod::Regular, TokenStream::new())),
+        [.., (last, _)] => Err(syn::Error::new_spanned(
+            last,
+            DeriveError::MultipleButcheringMethod,
+        )),
+    }
+}
+
+fn parse_meta_attr(attr: &Attribute) -> Option<Result<(&Attribute, FieldMetadata), syn::Error>> {
+    if !attr.path.is_ident("butcher") {
+        return None;
+    }
+
+    Some(attr.parse_args::<FieldMetadata>().map(|md| (attr, md)))
+}
+
+#[derive(Clone, Debug)]
+struct FieldMetadata(ButcheringMethod, TokenStream);
+
+impl Parse for FieldMetadata {
+    fn parse(input: ParseStream) -> SynResult<Self> {
+        let method = input.parse::<ButcheringMethod>()?;
+
+        let traits = if input.is_empty() {
+            TokenStream::new()
+        } else {
+            let _ = input.parse::<Token![,]>()?;
+            input.parse::<TokenStream>()?
+        };
+
+        Ok(FieldMetadata(method, traits))
     }
 }
 
@@ -182,18 +353,16 @@ fn find_generics_in_type(ty: &Type, generics: &HashSet<Ident>) -> Result<Vec<Ide
         | Type::Reference(TypeReference { elem, .. })
         | Type::Slice(TypeSlice { elem, .. }) => find_generics_in_type(elem.as_ref(), generics),
 
-        Type::Tuple(TypeTuple { elems, .. }) => {
-            elems.into_iter().try_fold(Vec::new(), |acc, ty| {
-                let found = find_generics_in_type(ty, generics);
-                extend_discovered_generics(acc, found)
-            })
-        }
+        Type::Tuple(TypeTuple { elems, .. }) => elems
+            .into_iter()
+            .map(|ty| find_generics_in_type(ty, generics))
+            .try_fold(Vec::new(), extend_discovered),
 
         Type::BareFn(TypeBareFn { inputs, output, .. }) => {
-            let mut found_generics = inputs.into_iter().try_fold(Vec::new(), |acc, arg| {
-                let found = find_generics_in_type(&arg.ty, generics);
-                extend_discovered_generics(acc, found)
-            })?;
+            let mut found_generics = inputs
+                .into_iter()
+                .map(|arg| find_generics_in_type(&arg.ty, generics))
+                .try_fold(Vec::new(), extend_discovered)?;
 
             if let ReturnType::Type(_, ty) = output {
                 found_generics.extend(find_generics_in_type(ty.as_ref(), generics)?);
@@ -214,12 +383,11 @@ fn find_generics_in_type(ty: &Type, generics: &HashSet<Ident>) -> Result<Vec<Ide
                 })
                 .flatten()
                 .filter_map(|arg| match arg {
-                    GenericArgument::Type(t) => Some(find_generics_in_type(t, generics)),
+                    GenericArgument::Type(t) => Some(t),
                     _ => None,
                 })
-                .try_fold(Vec::new(), |acc, rslt| {
-                    extend_discovered_generics(acc, rslt)
-                })?;
+                .map(|t| find_generics_in_type(t, generics))
+                .try_fold(Vec::new(), extend_discovered)?;
 
             match path.get_ident() {
                 Some(id) if generics.contains(id) => found_generics.push(id.clone()),
@@ -249,10 +417,88 @@ fn find_generics_in_type(ty: &Type, generics: &HashSet<Ident>) -> Result<Vec<Ide
     }
 }
 
-fn extend_discovered_generics(
-    mut discovered: Vec<Ident>,
-    to_add: Result<Vec<Ident>, syn::Error>,
-) -> Result<Vec<Ident>, syn::Error> {
+fn find_lifetimes_in_type(ty: &Type, lts: &HashSet<Lifetime>) -> Result<Vec<Lifetime>, syn::Error> {
+    match ty {
+        Type::Array(TypeArray { elem, .. })
+        | Type::Group(TypeGroup { elem, .. })
+        | Type::Paren(TypeParen { elem, .. })
+        | Type::Ptr(TypePtr { elem, .. })
+        | Type::Slice(TypeSlice { elem, .. }) => find_lifetimes_in_type(elem.as_ref(), lts),
+
+        Type::Reference(TypeReference { lifetime, elem, .. }) => {
+            let mut found_lifetimes = match lifetime {
+                Some(lt) if lts.contains(lt) => vec![lt.clone()],
+                Some(_) | None => Vec::new(),
+            };
+
+            found_lifetimes.extend(find_lifetimes_in_type(elem.as_ref(), lts)?);
+
+            Ok(found_lifetimes)
+        }
+
+        Type::Tuple(TypeTuple { elems, .. }) => elems
+            .into_iter()
+            .map(|ty| find_lifetimes_in_type(ty, lts))
+            .try_fold(Vec::new(), extend_discovered),
+
+        Type::BareFn(TypeBareFn { inputs, output, .. }) => {
+            let mut found_lifetimes = inputs
+                .into_iter()
+                .map(|arg| find_lifetimes_in_type(&arg.ty, lts))
+                .try_fold(Vec::new(), extend_discovered)?;
+
+            if let ReturnType::Type(_, ty) = output {
+                found_lifetimes.extend(find_lifetimes_in_type(ty.as_ref(), lts)?);
+            }
+
+            Ok(found_lifetimes)
+        }
+
+        Type::Path(TypePath { path, qself }) => {
+            let mut found_lifetimes = path
+                .segments
+                .iter()
+                .filter_map(|s| match &s.arguments {
+                    PathArguments::None | PathArguments::Parenthesized(_) => None,
+                    PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        args, ..
+                    }) => Some(args),
+                })
+                .flatten()
+                .filter_map(|arg| match arg {
+                    GenericArgument::Lifetime(lt) if lts.contains(lt) => Some(Ok(vec![lt.clone()])),
+                    GenericArgument::Type(ty) => Some(find_lifetimes_in_type(ty, lts)),
+                    _ => None,
+                })
+                .try_fold(Vec::new(), extend_discovered)?;
+
+            if let Some(QSelf { ty, .. }) = qself {
+                found_lifetimes.extend(find_lifetimes_in_type(ty.as_ref(), lts)?);
+            }
+
+            Ok(found_lifetimes)
+        }
+
+        Type::ImplTrait(tit) => Err(syn::Error::new_spanned(tit, DeriveError::FoundImplTrait)),
+
+        Type::Macro(m) => Err(syn::Error::new_spanned(m, DeriveError::FoundMacroAsType)),
+
+        Type::TraitObject(to) => Err(syn::Error::new_spanned(to, DeriveError::FoundTraitObject)),
+
+        // For the next three arms, the compiler is going to raise an error
+        // anyway.
+        Type::Infer(_) => Ok(Vec::new()),
+        Type::Never(_) => Ok(Vec::new()),
+        Type::Verbatim(_) => Ok(Vec::new()),
+
+        _ => panic!("Unknown type met"),
+    }
+}
+
+fn extend_discovered<T>(
+    mut discovered: Vec<T>,
+    to_add: Result<Vec<T>, syn::Error>,
+) -> Result<Vec<T>, syn::Error> {
     let to_add = to_add?;
     discovered.extend(to_add);
     Ok(discovered)
@@ -267,52 +513,76 @@ enum ButcheringMethod {
 }
 
 impl ButcheringMethod {
-    fn try_from(input: &Attribute) -> Option<Result<ButcheringMethod, syn::Error>> {
-        let meta = input.parse_meta().ok()?;
-
-        let methods = match &meta {
-            Meta::Path(_) | Meta::NameValue(_) => return None,
-            Meta::List(MetaList { path, nested, .. }) if path.is_ident("butcher") => nested,
-            Meta::List(_) => return None,
+    fn output_type_for(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
+        let ty = match self {
+            ButcheringMethod::Copy => quote! { #ty },
+            ButcheringMethod::Dereferenced | ButcheringMethod::Referenced => {
+                let cow = cow();
+                quote! { #cow < #lt , <Self::Input as std::ops::Deref>::Target > }
+            }
+            ButcheringMethod::Regular => {
+                let cow = cow();
+                quote! { #cow < #lt , #ty > }
+            }
         };
 
-        if methods.len() != 1 {
-            return Some(Err(syn::Error::new_spanned(
-                meta,
-                DeriveError::MultipleButcheringMethod,
-            )));
+        quote! { type Output = #ty; }
+    }
+
+    fn expand_borrowed_function(&self, lt: impl ToTokens) -> TokenStream {
+        let var_name = quote! { b };
+
+        let borrowed = borrowed();
+
+        let function_body = match self {
+            ButcheringMethod::Copy => quote! { #var_name.clone() },
+            ButcheringMethod::Dereferenced => quote! { #borrowed(#var_name.as_ref()) },
+            ButcheringMethod::Regular => quote! { #borrowed(#var_name) },
+            ButcheringMethod::Referenced => quote! { #borrowed(#var_name.as_ref()) },
+        };
+
+        quote! {
+            fn from_borrowed(#var_name: & #lt Self::Input) -> Self::Output {
+                #function_body
+            }
         }
+    }
 
-        let method = &methods[0];
+    fn expand_owned_function(&self) -> TokenStream {
+        let var_name = quote! { o };
 
-        let method = match method {
-            NestedMeta::Lit(_) => {
-                return Some(Err(syn::Error::new_spanned(
-                    method,
-                    DeriveError::MethodFoundLitteral,
-                )))
-            }
-            NestedMeta::Meta(Meta::Path(p)) => p.get_ident().map(ToString::to_string),
-            NestedMeta::Meta(_) => {
-                return Some(Err(syn::Error::new_spanned(
-                    method,
-                    DeriveError::NestedMethod,
-                )))
-            }
+        let owned = owned();
+
+        let function_body = match self {
+            ButcheringMethod::Copy => quote! { #var_name },
+            ButcheringMethod::Dereferenced => quote! { #owned(*#var_name) },
+            ButcheringMethod::Regular => quote! { #owned(#var_name) },
+            ButcheringMethod::Referenced => quote! { #owned(#var_name) },
         };
 
-        Some(Ok(match method.as_deref() {
-            Some("as_ref") => ButcheringMethod::Referenced,
-            Some("deref") => ButcheringMethod::Dereferenced,
-            Some("regular") => ButcheringMethod::Regular,
-            Some("copy") => ButcheringMethod::Copy,
-            _ => {
-                return Some(Err(syn::Error::new_spanned(
-                    method,
-                    DeriveError::UnknownMethod,
-                )))
+        quote! {
+            fn from_owned(#var_name: Self::Input) -> Self::Output {
+                #function_body
             }
-        }))
+        }
+    }
+}
+
+impl Parse for ButcheringMethod {
+    fn parse(input: ParseStream) -> SynResult<Self> {
+        let i = input.parse::<Ident>()?;
+
+        if i == "copy" {
+            Ok(ButcheringMethod::Copy)
+        } else if i == "deref" {
+            Ok(ButcheringMethod::Dereferenced)
+        } else if i == "regular" {
+            Ok(ButcheringMethod::Regular)
+        } else if i == "as_ref" {
+            Ok(ButcheringMethod::Referenced)
+        } else {
+            Err(syn::Error::new_spanned(i, DeriveError::UnknownMethod))
+        }
     }
 }
 
@@ -412,7 +682,7 @@ mod butchered_struct {
 
         let tmp = &bs.fields[2].vis;
         let left = quote! { #tmp };
-        let right = quote! {};
+        let right = TokenStream::new();
         assert_eq_tt!(left, right);
 
         let tmp = &bs.fields[3].vis;
@@ -422,12 +692,336 @@ mod butchered_struct {
 
         let tmp = &bs.fields[4].vis;
         let left = quote! { #tmp };
-        let right = quote! {};
+        let right = TokenStream::new();
         assert_eq_tt!(left, right);
 
         let tmp = &bs.fields[5].vis;
         let left = quote! { #tmp };
-        let right = quote! {};
+        let right = TokenStream::new();
+        assert_eq_tt!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod field {
+    use super::*;
+
+    use syn::parse_quote;
+
+    #[test]
+    fn associated_struct_declaration() {
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo {
+                a: usize,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].associated_struct_declaration(&bs.name);
+        let right = quote! {
+            struct ButcherFooa<>(
+                std::marker::PhantomData<()>,
+                std::marker::PhantomData<()>,
+            );
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<T> {
+                a: T,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].associated_struct_declaration(&bs.name);
+        let right = quote! {
+            struct ButcherFooa<T,>(
+                std::marker::PhantomData<(T,)>,
+                std::marker::PhantomData<()>,
+            );
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<'a> {
+                a: A<'a>,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].associated_struct_declaration(&bs.name);
+        let right = quote! {
+            struct ButcherFooa<'a,>(
+                std::marker::PhantomData<()>,
+                std::marker::PhantomData<(&'a (),)>,
+            );
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<'a, T,> {
+                a: &'a T,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].associated_struct_declaration(&bs.name);
+        let right = quote! {
+            struct ButcherFooa<'a, T,>(
+                std::marker::PhantomData<(T,)>,
+                std::marker::PhantomData<(&'a (),)>,
+            );
+        };
+        assert_eq_tt!(left, right);
+    }
+
+    #[test]
+    fn butcher_field_implementation_regular() {
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo {
+                a: usize,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+                type Input = usize;
+                type Output = std::borrow::Cow<'cow, usize>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b)
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(o)
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<'a> {
+                a: &'a usize,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
+            where
+                'a: 'cow,
+            {
+                type Input = &'a usize;
+                type Output = std::borrow::Cow<'cow, &'a usize>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b)
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(o)
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<T> {
+                a: T,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
+            where
+                T: 'cow,
+            {
+                type Input = T;
+                type Output = std::borrow::Cow<'cow, T>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b)
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(o)
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+    }
+
+    #[test]
+    fn butcher_field_implementation_copy() {
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo {
+                #[butcher(copy)]
+                a: usize,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+                type Input = usize;
+                type Output = usize;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    b.clone()
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    o
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<'a> {
+                #[butcher(copy)]
+                a: &'a usize,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
+            where
+                'a: 'cow,
+            {
+                type Input = &'a usize;
+                type Output = &'a usize;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    b.clone()
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    o
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<T> {
+                #[butcher(copy)]
+                a: T,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
+            where
+                T: 'cow,
+            {
+                type Input = T;
+                type Output = T;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    b.clone()
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    o
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+    }
+
+    #[test]
+    fn butcher_field_implementation_dereferenced() {
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo {
+                #[butcher(deref)]
+                a: Box<usize>,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+                type Input = Box<usize>;
+                type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b.as_ref())
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(*o)
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<'a> {
+                #[butcher(deref)]
+                a: Box<&'a usize>,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        assert_eq!(bs.fields[0].associated_lifetimes.len(), 1);
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
+            where
+                'a: 'cow,
+            {
+                type Input = Box<&'a usize>;
+                type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b.as_ref())
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(*o)
+                }
+            }
+        };
+        assert_eq_tt!(left, right);
+
+        let s: DeriveInput = parse_quote! {
+            #[derive(Butcher)]
+            struct Foo<T> {
+                #[butcher(deref)]
+                a: Box<T>,
+            }
+        };
+        let bs = ButcheredStruct::from(s).unwrap();
+        let left = bs.fields[0].butcher_field_implementation(&bs.name);
+        let right = quote! {
+            impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
+            where
+                T: 'cow,
+            {
+                type Input = Box<T>;
+                type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
+
+                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
+                    std::borrow::Cow::Borrowed(b.as_ref())
+                }
+
+                fn from_owned(o: Self::Input) -> Self::Output {
+                    std::borrow::Cow::Owned(*o)
+                }
+            }
+        };
         assert_eq_tt!(left, right);
     }
 }

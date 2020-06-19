@@ -22,7 +22,6 @@ macro_rules! assert_eq_tt {
 mod butcher_struct;
 
 // TODO: remove this, actually use this dead code
-#[allow(dead_code)]
 mod derive_butcher;
 
 #[proc_macro]
@@ -35,7 +34,7 @@ pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
     data.expand_to_code().into()
 }
 
-#[proc_macro_derive(Butcher)]
+#[proc_macro_derive(Butcher, attributes(butcher))]
 pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as DeriveInput);
     derive_butcher::ButcheredStruct::from(data)
