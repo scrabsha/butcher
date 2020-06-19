@@ -54,8 +54,6 @@ impl Display for DeriveError {
     }
 }
 
-type Errors = Vec<syn::Error>;
-
 impl Error for DeriveError {}
 
 #[inline]
@@ -91,21 +89,21 @@ pub(super) struct ButcheredStruct {
 }
 
 impl ButcheredStruct {
-    pub(super) fn from(input: DeriveInput) -> Result<ButcheredStruct, Errors> {
+    pub(super) fn from(input: DeriveInput) -> Result<ButcheredStruct, syn::Error> {
         let name = input.ident;
         let data = match input.data {
             Data::Struct(d) => Ok(d),
             Data::Enum(de) => Err((DeriveError::FoundEnum, de.enum_token.span)),
             Data::Union(du) => Err((DeriveError::FoundUnion, du.union_token.span)),
         }
-        .map_err(|(e, s)| vec![syn::Error::new(s, e)])?;
+        .map_err(|(e, s)| syn::Error::new(s, e))?;
 
         let fields = match data.fields {
             Fields::Named(fields) => Ok(fields.named),
             Fields::Unnamed(fu) => Err((DeriveError::FoundTupledStruct, fu.paren_token.span)),
             Fields::Unit => Err((DeriveError::FoundUnitStruct, name.span())),
         }
-        .map_err(|(e, s)| vec![syn::Error::new(s, e)])?;
+        .map_err(|(e, s)| syn::Error::new(s, e))?;
 
         let mut generic_types = HashSet::new();
         let mut lifetimes = HashSet::new();
@@ -120,26 +118,21 @@ impl ButcheredStruct {
             GenericParam::Const(_) => {}
         });
 
-        let (fields, errors) = fields
+        let fields = fields
             .into_iter()
             .map(|f| Field::from(f, &generic_types, &lifetimes))
-            .fold(
-                (Vec::new(), Vec::new()),
-                |(mut oks, mut errs), res| match res {
-                    Ok(v) => {
-                        oks.push(v);
-                        (oks, errs)
-                    }
-                    Err(e) => {
-                        errs.extend(e);
-                        (oks, errs)
-                    }
-                },
-            );
-
-        if !errors.is_empty() {
-            return Err(errors);
-        }
+            .fold(Ok(Vec::new()), |acc, res| match (acc, res) {
+                (Ok(mut main), Ok(v)) => {
+                    main.push(v);
+                    Ok(main)
+                }
+                (Ok(_), Err(e)) => Err(e),
+                (Err(mut main_err), Err(e)) => {
+                    main_err.combine(e);
+                    Err(main_err)
+                }
+                (tmp @ Err(_), Ok(_)) => tmp,
+            })?;
 
         Ok(ButcheredStruct { name, fields })
     }
@@ -166,9 +159,8 @@ impl Field {
         input: syn::Field,
         generic_types: &HashSet<Ident>,
         lifetimes: &HashSet<Lifetime>,
-    ) -> Result<Field, Errors> {
-        let FieldMetadata(method, additional_traits) =
-            parse_meta_attrs(input.attrs.as_slice()).map_err(|e| vec![e])?;
+    ) -> Result<Field, syn::Error> {
+        let FieldMetadata(method, additional_traits) = parse_meta_attrs(input.attrs.as_slice())?;
 
         let vis = input.vis;
 
@@ -178,10 +170,8 @@ impl Field {
 
         let ty = input.ty;
 
-        let mut associated_generics =
-            find_generics_in_type(&ty, generic_types).map_err(|e| vec![e])?;
-        let mut associated_lifetimes =
-            find_lifetimes_in_type(&ty, lifetimes).map_err(|e| vec![e])?;
+        let mut associated_generics = find_generics_in_type(&ty, generic_types)?;
+        let mut associated_lifetimes = find_lifetimes_in_type(&ty, lifetimes)?;
 
         associated_generics.sort_unstable();
         associated_lifetimes.sort_unstable();

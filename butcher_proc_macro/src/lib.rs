@@ -3,11 +3,7 @@ extern crate proc_macro;
 use crate::butcher_struct::ButcheredStruct;
 
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
-
-use syn::Error;
 
 #[cfg(test)]
 macro_rules! assert_eq_tt {
@@ -21,7 +17,6 @@ macro_rules! assert_eq_tt {
 
 mod butcher_struct;
 
-// TODO: remove this, actually use this dead code
 mod derive_butcher;
 
 #[proc_macro]
@@ -39,12 +34,6 @@ pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as DeriveInput);
     derive_butcher::ButcheredStruct::from(data)
         .map(derive_butcher::ButcheredStruct::expand_to_code)
-        .unwrap_or_else(to_compile_errors)
+        .unwrap_or_else(|e| e.to_compile_error())
         .into()
-}
-
-fn to_compile_errors(i: Vec<Error>) -> TokenStream2 {
-    let i = i.iter().map(syn::Error::to_compile_error);
-
-    quote! { #( #i )* }
 }
