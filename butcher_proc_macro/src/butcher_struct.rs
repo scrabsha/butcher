@@ -54,8 +54,8 @@ impl ButcheredStruct {
         quote! {
             (
                 #(
-                    #variables,
-                )*
+                    #variables
+                ),*
             )
         }
     }
@@ -76,8 +76,8 @@ impl ButcheredStruct {
         quote! {
             (
                 #(
-                    #variables,
-                )*
+                    #variables
+                ),*
             )
         }
     }
@@ -177,10 +177,10 @@ mod butchered_struct {
         let right = quote! {
             match foo {
                 std::borrow::Cow::Owned(Foo { a, .. }) => (
-                    ButcherFooa::from_owned(a),
+                    ButcherFooa::from_owned(a)
                 ),
                 std::borrow::Cow::Borrowed(Foo { a, .. }) => (
-                    ButcherFooa::from_borrowed(a),
+                    ButcherFooa::from_borrowed(a)
                 ),
             }
         };
@@ -198,7 +198,7 @@ mod butchered_struct {
         let left = tmp.owned_arm();
         let right = quote! {
             std::borrow::Cow::Owned(Foo { a, .. }) => (
-                ButcherFooa::from_owned(a),
+                ButcherFooa::from_owned(a)
             ),
         };
 
@@ -215,7 +215,7 @@ mod butchered_struct {
         let left = tmp.owned_return_expr();
         let right = quote! {
             (
-                ButcherFooa::from_owned(a),
+                ButcherFooa::from_owned(a)
             )
         };
 
@@ -232,7 +232,7 @@ mod butchered_struct {
         let left = tmp.borrowed_arm();
         let right = quote! {
             std::borrow::Cow::Borrowed(Foo { a, .. }) => (
-                ButcherFooa::from_borrowed(a),
+                ButcherFooa::from_borrowed(a)
             ),
         };
 
@@ -251,7 +251,7 @@ mod butchered_struct {
         let right = quote! {
             (
                 ButcherFooa::from_borrowed(a),
-                ButcherFoob::from_borrowed(b),
+                ButcherFoob::from_borrowed(b)
             )
         };
 

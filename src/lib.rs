@@ -115,7 +115,7 @@ mod derive_butcher {
         }
 
         #[allow(dead_code)]
-        fn destructure_book(b: Cow<Book>) -> (usize,) {
+        fn destructure_book(b: Cow<Book>) -> usize {
             butcher_struct!(b: Book, id)
         }
     }
