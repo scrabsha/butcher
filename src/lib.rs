@@ -25,7 +25,7 @@
 //!
 //! #[derive(Butcher, Clone)]
 //! struct Book {
-//!     #[butcher(as_ref)]
+//!     #[butcher(flatten)]
 //!     title: String,
 //!     #[butcher(copy)]
 //!     id: usize,
