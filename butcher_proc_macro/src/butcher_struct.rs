@@ -6,6 +6,8 @@ use syn::{
     Ident, Result, Token,
 };
 
+use crate::utils;
+
 pub(super) struct ButcheredStruct {
     name: Ident,
     ty: Ident,
@@ -47,13 +49,12 @@ impl ButcheredStruct {
     }
 
     fn owned_return_expr(&self) -> TokenStream {
-        let variables = self.fields.iter().map(Field::expand);
-        let owned = owned();
+        let variables = self.fields.iter().map(|f| f.expand_owned(&self.ty));
 
         quote! {
             (
                 #(
-                    #owned(#variables),
+                    #variables,
                 )*
             )
         }
@@ -70,13 +71,12 @@ impl ButcheredStruct {
     }
 
     fn borrowed_return_expr(&self) -> TokenStream {
-        let variables = self.fields.iter().map(Field::expand);
-        let borrowed = borrowed();
+        let variables = self.fields.iter().map(|f| f.expand_borrowed(&self.ty));
 
         quote! {
             (
                 #(
-                    #borrowed(#variables),
+                    #variables,
                 )*
             )
         }
@@ -121,6 +121,20 @@ impl Field {
         let name = &self.name;
         quote! { #name }
     }
+
+    fn expand_owned(&self, main_name: &Ident) -> TokenStream {
+        let associated_struct_name = utils::associated_struct_name(main_name, &self.name);
+        let var_name = &self.name;
+
+        quote! { #associated_struct_name::from_owned(#var_name) }
+    }
+
+    fn expand_borrowed(&self, main_name: &Ident) -> TokenStream {
+        let associated_struct_name = utils::associated_struct_name(main_name, &self.name);
+        let var_name = &self.name;
+
+        quote! { #associated_struct_name::from_borrowed(#var_name) }
+    }
 }
 
 impl Parse for Field {
@@ -163,10 +177,10 @@ mod butchered_struct {
         let right = quote! {
             match foo {
                 std::borrow::Cow::Owned(Foo { a, .. }) => (
-                    std::borrow::Cow::Owned(a),
+                    ButcherFooa::from_owned(a),
                 ),
                 std::borrow::Cow::Borrowed(Foo { a, .. }) => (
-                    std::borrow::Cow::Borrowed(a),
+                    ButcherFooa::from_borrowed(a),
                 ),
             }
         };
@@ -184,7 +198,7 @@ mod butchered_struct {
         let left = tmp.owned_arm();
         let right = quote! {
             std::borrow::Cow::Owned(Foo { a, .. }) => (
-                std::borrow::Cow::Owned(a),
+                ButcherFooa::from_owned(a),
             ),
         };
 
@@ -201,7 +215,7 @@ mod butchered_struct {
         let left = tmp.owned_return_expr();
         let right = quote! {
             (
-                std::borrow::Cow::Owned(a),
+                ButcherFooa::from_owned(a),
             )
         };
 
@@ -218,7 +232,7 @@ mod butchered_struct {
         let left = tmp.borrowed_arm();
         let right = quote! {
             std::borrow::Cow::Borrowed(Foo { a, .. }) => (
-                std::borrow::Cow::Borrowed(a),
+                ButcherFooa::from_borrowed(a),
             ),
         };
 
@@ -236,8 +250,8 @@ mod butchered_struct {
         let left = tmp.borrowed_return_expr();
         let right = quote! {
             (
-                std::borrow::Cow::Borrowed(a),
-                std::borrow::Cow::Borrowed(b),
+                ButcherFooa::from_borrowed(a),
+                ButcherFoob::from_borrowed(b),
             )
         };
 
