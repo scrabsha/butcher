@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
+          - beta
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: beta
           override: true
       - uses: actions-rs/cargo@v1
         with:
@@ -43,8 +43,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
-          - 1.42.0
+          - beta
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -74,7 +73,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
+          - beta
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -93,7 +92,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
+          - beta
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1

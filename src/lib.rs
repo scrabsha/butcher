@@ -21,16 +21,20 @@
 //! use std::borrow::Cow;
 //! use butcher::butcher_struct;
 //!
-//! #[derive(Clone)]
+//! use butcher::{Butcher, ButcherField};
+//!
+//! #[derive(Butcher, Clone)]
 //! struct Book {
+//!     #[butcher(flatten)]
 //!     title: String,
+//!     #[butcher(copy)]
 //!     id: usize,
 //!     author: Box<str>,
 //!     // An useless field
 //!     is_opened: bool,
 //! }
 //!
-//! fn destructure_book(b: Cow<Book>) -> (Cow<usize>, Cow<String>, Cow<Box<str>>) {
+//! fn destructure_book(b: Cow<Book>) -> (usize, Cow<str>, Cow<Box<str>>) {
 //!     butcher_struct!(b: Book, id, title, author)
 //! }
 //! ```
@@ -59,46 +63,60 @@
 
 pub mod iterator;
 
-// This is blocked by issue #54727. See it on github:
-// https://github.com/rust-lang/rust/issues/54727
-//
-// As such, we have to switch to a hand-made declarative macro.
-// pub use butcher_proc_macro::butcher_struct;
+pub use butcher_proc_macro::*;
 
-#[macro_export]
-macro_rules! butcher_struct {
-    {
-        $var_name: ident : $ty: ident,
-        $( $field: ident ),+ $(,)?
-    } => {{
-        use std::borrow::Cow;
-        match $var_name {
-            Cow::Owned($ty {
-                $(
-                    $field,
-                )+
-                ..
-            }) => (
-                $(
-                    Cow::Owned($field),
-                )+
-            ),
-            Cow::Borrowed($ty {
-                $(
-                    $field,
-                )+
-                ..
-            }) => (
-                $(
-                    Cow::Borrowed($field),
-                )+
-            ),
+pub use butcher_core::ButcherField;
+
+#[cfg(test)]
+mod derive_butcher {
+    use super::*;
+
+    mod r#struct {
+        use super::*;
+
+        #[allow(dead_code)]
+        #[derive(Butcher)]
+        struct Foo<'a, T> {
+            #[butcher(copy)]
+            first: usize,
+            #[butcher(unbox)]
+            second: Box<T>,
+            #[butcher(copy)]
+            third: &'a usize,
+            #[butcher(copy, T: Clone)]
+            fourth: T,
+            #[butcher(regular, T: Clone)]
+            fifth: T,
+            #[butcher(flatten)]
+            sixth: String,
+            #[butcher(copy, T: 'a)]
+            seventh: &'a T,
+            #[butcher(flatten, T: Clone)]
+            eighth: Vec<T>,
         }
-    }};
+    }
 
-    {
-        $var_name: ident : $ty: ident $( , )?
-    } => {
-        compile_error!("This non-distructuring is equivalent of a Drop. Use this function instead.");
+    mod struct_butchering {
+        use super::*;
+
+        use std::borrow::Cow;
+
+        #[allow(dead_code)]
+        #[derive(Butcher, Clone)]
+        struct Book {
+            #[butcher(flatten)]
+            title: String,
+            #[butcher(copy)]
+            id: usize,
+            #[butcher(flatten)]
+            author: Box<str>,
+            // An useless field
+            is_opened: bool,
+        }
+
+        #[allow(dead_code)]
+        fn destructure_book(b: Cow<Book>) -> usize {
+            butcher_struct!(b: Book, id)
+        }
     }
 }

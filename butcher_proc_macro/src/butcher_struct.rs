@@ -6,6 +6,8 @@ use syn::{
     Ident, Result, Token,
 };
 
+use crate::utils;
+
 pub(super) struct ButcheredStruct {
     name: Ident,
     ty: Ident,
@@ -47,14 +49,13 @@ impl ButcheredStruct {
     }
 
     fn owned_return_expr(&self) -> TokenStream {
-        let variables = self.fields.iter().map(|f| f.expand_to_value());
-        let owned = owned();
+        let variables = self.fields.iter().map(|f| f.expand_owned(&self.ty));
 
         quote! {
             (
                 #(
-                    #owned(#variables),
-                )*
+                    #variables
+                ),*
             )
         }
     }
@@ -70,20 +71,19 @@ impl ButcheredStruct {
     }
 
     fn borrowed_return_expr(&self) -> TokenStream {
-        let variables = self.fields.iter().map(Field::expand_to_pattern);
-        let borrowed = borrowed();
+        let variables = self.fields.iter().map(|f| f.expand_borrowed(&self.ty));
 
         quote! {
             (
                 #(
-                    #borrowed(#variables),
-                )*
+                    #variables
+                ),*
             )
         }
     }
 
     fn inner_struct_pattern(&self) -> TokenStream {
-        let variables = self.fields.iter().map(Field::expand_to_pattern);
+        let variables = self.fields.iter().map(Field::expand);
         let ty = &self.ty;
 
         quote! {
@@ -114,45 +114,34 @@ impl Parse for ButcheredStruct {
 
 struct Field {
     name: Ident,
-    state: FieldState,
 }
 
 impl Field {
-    fn expand_to_pattern(&self) -> TokenStream {
+    fn expand(&self) -> TokenStream {
         let name = &self.name;
         quote! { #name }
     }
 
-    fn expand_to_value(&self) -> TokenStream {
-        let name = &self.name;
-        match self.state {
-            FieldState::Normal => quote! { #name },
-            FieldState::Dereferenced => quote! { *#name },
-        }
+    fn expand_owned(&self, main_name: &Ident) -> TokenStream {
+        let associated_struct_name = utils::associated_struct_name(main_name, &self.name);
+        let var_name = &self.name;
+
+        quote! { #associated_struct_name::from_owned(#var_name) }
+    }
+
+    fn expand_borrowed(&self, main_name: &Ident) -> TokenStream {
+        let associated_struct_name = utils::associated_struct_name(main_name, &self.name);
+        let var_name = &self.name;
+
+        quote! { #associated_struct_name::from_borrowed(#var_name) }
     }
 }
 
 impl Parse for Field {
     fn parse(input: ParseStream) -> Result<Self> {
-        let state = input.parse::<FieldState>()?;
         let name = input.parse::<Ident>()?;
 
-        Ok(Field { name, state })
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum FieldState {
-    Dereferenced,
-    Normal,
-}
-
-impl Parse for FieldState {
-    fn parse(input: ParseStream) -> Result<Self> {
-        Ok(match input.parse::<Token![*]>() {
-            Ok(_) => FieldState::Dereferenced,
-            Err(_) => FieldState::Normal,
-        })
+        Ok(Field { name })
     }
 }
 
@@ -166,17 +155,14 @@ mod butchered_struct {
     fn parse() {
         let res: ButcheredStruct = parse_quote! {
             foo: Foo,
-            a, *b, c
+            a, b, c
         };
 
         assert_eq!(res.name, "foo");
         assert_eq!(res.ty, "Foo");
         assert_eq!(res.fields[0].name, "a");
-        assert_eq!(res.fields[0].state, FieldState::Normal);
         assert_eq!(res.fields[1].name, "b");
-        assert_eq!(res.fields[1].state, FieldState::Dereferenced);
         assert_eq!(res.fields[2].name, "c");
-        assert_eq!(res.fields[2].state, FieldState::Normal);
         assert_eq!(res.fields.len(), 3);
     }
 
@@ -184,19 +170,17 @@ mod butchered_struct {
     fn expand_to_code() {
         let res: ButcheredStruct = parse_quote! {
             foo: Foo,
-            a, *b,
+            a,
         };
 
         let left = res.expand_to_code();
         let right = quote! {
             match foo {
-                std::borrow::Cow::Owned(Foo { a, b, .. }) => (
-                    std::borrow::Cow::Owned(a),
-                    std::borrow::Cow::Owned(*b),
+                std::borrow::Cow::Owned(Foo { a, .. }) => (
+                    ButcherFooa::from_owned(a)
                 ),
-                std::borrow::Cow::Borrowed(Foo { a, b, .. }) => (
-                    std::borrow::Cow::Borrowed(a),
-                    std::borrow::Cow::Borrowed(b),
+                std::borrow::Cow::Borrowed(Foo { a, .. }) => (
+                    ButcherFooa::from_borrowed(a)
                 ),
             }
         };
@@ -209,14 +193,12 @@ mod butchered_struct {
         let tmp: ButcheredStruct = parse_quote! {
             foo: Foo,
             a,
-            *b,
         };
 
         let left = tmp.owned_arm();
         let right = quote! {
-            std::borrow::Cow::Owned(Foo { a, b, .. }) => (
-                std::borrow::Cow::Owned(a),
-                std::borrow::Cow::Owned(*b),
+            std::borrow::Cow::Owned(Foo { a, .. }) => (
+                ButcherFooa::from_owned(a)
             ),
         };
 
@@ -228,14 +210,12 @@ mod butchered_struct {
         let tmp: ButcheredStruct = parse_quote! {
             foo: Foo,
             a,
-            *b,
         };
 
         let left = tmp.owned_return_expr();
         let right = quote! {
             (
-                std::borrow::Cow::Owned(a),
-                std::borrow::Cow::Owned(*b),
+                ButcherFooa::from_owned(a)
             )
         };
 
@@ -247,14 +227,12 @@ mod butchered_struct {
         let tmp: ButcheredStruct = parse_quote! {
             foo: Foo,
             a,
-            *b,
         };
 
         let left = tmp.borrowed_arm();
         let right = quote! {
-            std::borrow::Cow::Borrowed(Foo { a, b, .. }) => (
-                std::borrow::Cow::Borrowed(a),
-                std::borrow::Cow::Borrowed(b),
+            std::borrow::Cow::Borrowed(Foo { a, .. }) => (
+                ButcherFooa::from_borrowed(a)
             ),
         };
 
@@ -266,14 +244,14 @@ mod butchered_struct {
         let tmp: ButcheredStruct = parse_quote! {
             foo: Foo,
             a,
-            *b,
+            b,
         };
 
         let left = tmp.borrowed_return_expr();
         let right = quote! {
             (
-                std::borrow::Cow::Borrowed(a),
-                std::borrow::Cow::Borrowed(b),
+                ButcherFooa::from_borrowed(a),
+                ButcherFoob::from_borrowed(b)
             )
         };
 
@@ -285,7 +263,7 @@ mod butchered_struct {
         let tmp: ButcheredStruct = parse_quote! {
             foo: Foo,
             a,
-            *b,
+            b,
             c
         };
 
@@ -302,72 +280,17 @@ mod field {
     use syn::parse_quote;
 
     #[test]
-    fn parse_normal() {
+    fn parse() {
         let res: Field = parse_quote! { a };
         assert_eq!(res.name, "a");
-        assert_eq!(res.state, FieldState::Normal);
-    }
-
-    #[test]
-    fn parse_dereferenced() {
-        let res: Field = parse_quote! { *a };
-        assert_eq!(res.name, "a");
-        assert_eq!(res.state, FieldState::Dereferenced);
     }
 
     #[test]
     fn expand_to_pattern() {
         let tmp: Field = parse_quote! { a };
-        let left = tmp.expand_to_pattern();
+        let left = tmp.expand();
         let right = quote! { a };
 
         assert_eq_tt!(left, right);
-
-        let tmp: Field = parse_quote! { *a };
-        let left = tmp.expand_to_pattern();
-        let right = quote! { a };
-
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn expand_to_code_normal() {
-        let tmp: Field = parse_quote! { a };
-        let left = tmp.expand_to_value();
-        let right = quote! { a };
-
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn expand_to_code_dereferenced() {
-        let tmp: Field = parse_quote! { *a };
-        let left = tmp.expand_to_value();
-        let right = quote! { *a };
-
-        assert_eq_tt!(left, right);
-    }
-}
-
-#[cfg(test)]
-mod field_state {
-    use super::*;
-
-    use syn::parse_quote;
-
-    #[test]
-    fn parse_normal() {
-        let left: FieldState = parse_quote! {};
-        let right = FieldState::Normal;
-
-        assert_eq!(left, right);
-    }
-
-    #[test]
-    fn parse_dereferenced() {
-        let left: FieldState = parse_quote! { * };
-        let right = FieldState::Dereferenced;
-
-        assert_eq!(left, right);
     }
 }
