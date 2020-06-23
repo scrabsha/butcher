@@ -270,13 +270,17 @@ impl Field {
     }
 
     fn where_clause_trait(&self, lt: &TokenStream) -> TokenStream {
+        let required_by_method = self.method.required_traits_for(&self.ty);
+
         let bounds_for_generic_types = self.associated_generics.iter().map(|t| quote! { #t: #lt });
         let bounds_for_lifetimes = self.associated_lifetimes.iter().map(|l| quote! { #l: #lt });
         let generics = bounds_for_generic_types.chain(bounds_for_lifetimes);
+
         let user_provided_bounds = &self.additional_traits;
 
         quote! {
             where
+                #required_by_method,
                 #( #generics, )*
                 #user_provided_bounds
         }
@@ -498,16 +502,27 @@ fn extend_discovered<T>(
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum ButcheringMethod {
     Copy,
-    Dereferenced,
+    Flatten,
     Regular,
-    Referenced,
+    Unbox,
 }
 
 impl ButcheringMethod {
+    fn required_traits_for(&self, ty: &Type) -> TokenStream {
+        match self {
+            ButcheringMethod::Copy => quote! { #ty: Clone },
+            ButcheringMethod::Flatten => {
+                quote! { #ty: Into<<<#ty as std::ops::Deref>::Target as ToOwned>::Owned> }
+            }
+            ButcheringMethod::Regular => quote! { #ty: Clone },
+            ButcheringMethod::Unbox => quote! { <#ty as std::ops::Deref>::Target: Clone },
+        }
+    }
+
     fn output_type_for(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
         let ty = match self {
             ButcheringMethod::Copy => quote! { #ty },
-            ButcheringMethod::Dereferenced | ButcheringMethod::Referenced => {
+            ButcheringMethod::Flatten | ButcheringMethod::Unbox => {
                 let cow = cow();
                 quote! { #cow < #lt , <Self::Input as std::ops::Deref>::Target > }
             }
@@ -527,9 +542,9 @@ impl ButcheringMethod {
 
         let function_body = match self {
             ButcheringMethod::Copy => quote! { #var_name.clone() },
-            ButcheringMethod::Dereferenced => quote! { #borrowed(#var_name.as_ref()) },
+            ButcheringMethod::Flatten => quote! { #borrowed(std::ops::Deref::deref(#var_name)) },
             ButcheringMethod::Regular => quote! { #borrowed(#var_name) },
-            ButcheringMethod::Referenced => quote! { #borrowed(#var_name.as_ref()) },
+            ButcheringMethod::Unbox => quote! { #borrowed(std::ops::Deref::deref(#var_name)) },
         };
 
         quote! {
@@ -546,9 +561,9 @@ impl ButcheringMethod {
 
         let function_body = match self {
             ButcheringMethod::Copy => quote! { #var_name },
-            ButcheringMethod::Dereferenced => quote! { #owned(*#var_name) },
+            ButcheringMethod::Flatten => quote! { #owned(#var_name.into()) },
             ButcheringMethod::Regular => quote! { #owned(#var_name) },
-            ButcheringMethod::Referenced => quote! { #owned(#var_name) },
+            ButcheringMethod::Unbox => quote! { #owned(*#var_name) },
         };
 
         quote! {
@@ -565,12 +580,12 @@ impl Parse for ButcheringMethod {
 
         if i == "copy" {
             Ok(ButcheringMethod::Copy)
-        } else if i == "deref" {
-            Ok(ButcheringMethod::Dereferenced)
+        } else if i == "flatten" {
+            Ok(ButcheringMethod::Flatten)
         } else if i == "regular" {
             Ok(ButcheringMethod::Regular)
-        } else if i == "as_ref" {
-            Ok(ButcheringMethod::Referenced)
+        } else if i == "unbox" {
+            Ok(ButcheringMethod::Unbox)
         } else {
             Err(syn::Error::new_spanned(i, DeriveError::UnknownMethod))
         }
@@ -593,10 +608,10 @@ mod butchered_struct {
             struct Foo<'a, T> {
                 #[butcher(copy)]
                 pub a: &'a str,
-                #[butcher(as_ref)]
+                #[butcher(flatten)]
                 pub(super) b: String,
                 c: T,
-                #[butcher(deref)]
+                #[butcher(unbox)]
                 pub(crate) d: Box<T>,
                 #[butcher(regular)]
                 e: (),
@@ -612,7 +627,7 @@ mod butchered_struct {
         assert!(bs.fields[4].associated_generics.is_empty());
 
         assert_eq!(bs.fields[1].name, "b");
-        assert_eq!(bs.fields[1].method, ButcheringMethod::Referenced);
+        assert_eq!(bs.fields[1].method, ButcheringMethod::Flatten);
         assert!(bs.fields[4].associated_generics.is_empty());
 
         assert_eq!(bs.fields[2].name, "c");
@@ -620,7 +635,7 @@ mod butchered_struct {
         assert_eq!(bs.fields[2].associated_generics, &["T"]);
 
         assert_eq!(bs.fields[3].name, "d");
-        assert_eq!(bs.fields[3].method, ButcheringMethod::Dereferenced);
+        assert_eq!(bs.fields[3].method, ButcheringMethod::Unbox);
         assert_eq!(bs.fields[3].associated_generics, &["T"]);
 
         assert_eq!(bs.fields[4].name, "e");
@@ -781,7 +796,10 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].butcher_field_implementation(&bs.name);
         let right = quote! {
-            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<>
+            where
+                usize: Clone,
+            {
                 type Input = usize;
                 type Output = std::borrow::Cow<'cow, usize>;
 
@@ -807,6 +825,7 @@ mod field {
         let right = quote! {
             impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
             where
+            &'a usize: Clone,
                 'a: 'cow,
             {
                 type Input = &'a usize;
@@ -834,6 +853,7 @@ mod field {
         let right = quote! {
             impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
             where
+                T: Clone,
                 T: 'cow,
             {
                 type Input = T;
@@ -863,7 +883,10 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].butcher_field_implementation(&bs.name);
         let right = quote! {
-            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<>
+            where
+                usize: Clone,
+            {
                 type Input = usize;
                 type Output = usize;
 
@@ -890,6 +913,7 @@ mod field {
         let right = quote! {
             impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
             where
+                &'a usize: Clone,
                 'a: 'cow,
             {
                 type Input = &'a usize;
@@ -918,6 +942,7 @@ mod field {
         let right = quote! {
             impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
             where
+                T: Clone,
                 T: 'cow,
             {
                 type Input = T;
@@ -940,19 +965,22 @@ mod field {
         let s: DeriveInput = parse_quote! {
             #[derive(Butcher)]
             struct Foo {
-                #[butcher(deref)]
+                #[butcher(unbox)]
                 a: Box<usize>,
             }
         };
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].butcher_field_implementation(&bs.name);
         let right = quote! {
-            impl<'cow,> ButcherField<'cow> for ButcherFooa<> where {
+            impl<'cow,> ButcherField<'cow> for ButcherFooa<>
+            where
+                <Box<usize> as std::ops::Deref>::Target: Clone,
+            {
                 type Input = Box<usize>;
                 type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
 
                 fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b.as_ref())
+                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
                 }
 
                 fn from_owned(o: Self::Input) -> Self::Output {
@@ -965,7 +993,7 @@ mod field {
         let s: DeriveInput = parse_quote! {
             #[derive(Butcher)]
             struct Foo<'a> {
-                #[butcher(deref)]
+                #[butcher(unbox)]
                 a: Box<&'a usize>,
             }
         };
@@ -975,13 +1003,14 @@ mod field {
         let right = quote! {
             impl<'cow, 'a,> ButcherField<'cow> for ButcherFooa<'a,>
             where
+                <Box<&'a usize> as std::ops::Deref>::Target: Clone,
                 'a: 'cow,
             {
                 type Input = Box<&'a usize>;
                 type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
 
                 fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b.as_ref())
+                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
                 }
 
                 fn from_owned(o: Self::Input) -> Self::Output {
@@ -994,7 +1023,7 @@ mod field {
         let s: DeriveInput = parse_quote! {
             #[derive(Butcher)]
             struct Foo<T> {
-                #[butcher(deref)]
+                #[butcher(unbox)]
                 a: Box<T>,
             }
         };
@@ -1003,13 +1032,14 @@ mod field {
         let right = quote! {
             impl<'cow, T> ButcherField<'cow> for ButcherFooa<T,>
             where
+                <Box<T> as std::ops::Deref>::Target: Clone,
                 T: 'cow,
             {
                 type Input = Box<T>;
                 type Output = std::borrow::Cow<'cow, <Self::Input as std::ops::Deref>::Target>;
 
                 fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b.as_ref())
+                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
                 }
 
                 fn from_owned(o: Self::Input) -> Self::Output {
