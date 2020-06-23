@@ -210,6 +210,7 @@ impl Field {
         let phantom = phantom();
 
         quote! {
+            #[allow(non_camel_case_types)]
             #vis struct #struct_with_generics
                 (
                     #phantom< ( #( #types_in_phantom, )* ) > ,
@@ -709,6 +710,7 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].associated_struct_declaration(&bs.name);
         let right = quote! {
+            #[allow(non_camel_case_types)]
             struct ButcherFooa<>(
                 std::marker::PhantomData<()>,
                 std::marker::PhantomData<()>,
@@ -725,6 +727,7 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].associated_struct_declaration(&bs.name);
         let right = quote! {
+            #[allow(non_camel_case_types)]
             struct ButcherFooa<T,>(
                 std::marker::PhantomData<(T,)>,
                 std::marker::PhantomData<()>,
@@ -741,6 +744,7 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].associated_struct_declaration(&bs.name);
         let right = quote! {
+            #[allow(non_camel_case_types)]
             struct ButcherFooa<'a,>(
                 std::marker::PhantomData<()>,
                 std::marker::PhantomData<(&'a (),)>,
@@ -757,6 +761,7 @@ mod field {
         let bs = ButcheredStruct::from(s).unwrap();
         let left = bs.fields[0].associated_struct_declaration(&bs.name);
         let right = quote! {
+            #[allow(non_camel_case_types)]
             struct ButcherFooa<'a, T,>(
                 std::marker::PhantomData<(T,)>,
                 std::marker::PhantomData<(&'a (),)>,
