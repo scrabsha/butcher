@@ -16,7 +16,7 @@ use quote::{quote, ToTokens};
 
 use proc_macro2::TokenStream;
 
-use crate::utils;
+use crate::utils::{self, FieldName};
 
 #[derive(Debug, PartialEq)]
 pub enum DeriveError {
@@ -24,8 +24,6 @@ pub enum DeriveError {
     FoundUnitStruct,
     // TODO: remove this, handle enums
     FoundEnum,
-    // TODO: remove this, handle tupled struct
-    FoundTupledStruct,
     MultipleButcheringMethod,
     FoundImplTrait,
     FoundMacroAsType,
@@ -41,7 +39,6 @@ impl Display for DeriveError {
             DeriveError::FoundEnum => {
                 "Butcher currently does not support enums. This is planned for next release"
             }
-            DeriveError::FoundTupledStruct => "Butcher does not currently support tupled structs",
             DeriveError::MultipleButcheringMethod => {
                 "Multiple butchering method provided. Choose one!"
             }
@@ -100,7 +97,7 @@ impl ButcheredStruct {
 
         let fields = match data.fields {
             Fields::Named(fields) => Ok(fields.named),
-            Fields::Unnamed(fu) => Err((DeriveError::FoundTupledStruct, fu.paren_token.span)),
+            Fields::Unnamed(fields) => Ok(fields.unnamed),
             Fields::Unit => Err((DeriveError::FoundUnitStruct, name.span())),
         }
         .map_err(|(e, s)| syn::Error::new(s, e))?;
@@ -120,7 +117,8 @@ impl ButcheredStruct {
 
         let fields = fields
             .into_iter()
-            .map(|f| Field::from(f, &generic_types, &lifetimes))
+            .enumerate()
+            .map(|(id, f)| Field::from(f, &generic_types, &lifetimes, id))
             .fold(Ok(Vec::new()), |acc, res| match (acc, res) {
                 (Ok(mut main), Ok(v)) => {
                     main.push(v);
@@ -145,7 +143,7 @@ impl ButcheredStruct {
 }
 
 struct Field {
-    name: Ident,
+    name: FieldName,
     method: ButcheringMethod,
     vis: Visibility,
     ty: Type,
@@ -159,6 +157,7 @@ impl Field {
         input: syn::Field,
         generic_types: &HashSet<Ident>,
         lifetimes: &HashSet<Lifetime>,
+        id: usize,
     ) -> Result<Field, syn::Error> {
         let FieldMetadata(method, additional_traits) = parse_meta_attrs(input.attrs.as_slice())?;
 
@@ -166,7 +165,8 @@ impl Field {
 
         let name = input
             .ident
-            .expect("Fields of named struct should have a name");
+            .map(FieldName::from)
+            .unwrap_or_else(|| FieldName::Unnamed(id));
 
         let ty = input.ty;
 

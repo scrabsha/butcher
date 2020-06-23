@@ -119,4 +119,12 @@ mod derive_butcher {
             butcher_struct!(b: Book, id)
         }
     }
+
+    mod tupled_struct {
+        use super::*;
+
+        #[allow(dead_code)]
+        #[derive(Butcher)]
+        struct Foo(usize, f32);
+    }
 }
