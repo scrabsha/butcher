@@ -1,0 +1,17 @@
+[package]
+name = "butcher"
+version = "0.1.1"
+authors = ["Sasha <sasha.pourcelot@protonmail.com>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+description = "An easy way to interact with structs and enums wrapped in Cows"
+repository = "https://github.com/scileo/butcher"
+documentation = "https://docs.rs/butcher"
+readme = "README.md"
+categories = []
+keywords = ["rust-patterns"]
+
+[dependencies]
+butcher_proc_macro = { path = "../butcher_proc_macro" }
+butcher_core = { path = "../butcher_core" }
+

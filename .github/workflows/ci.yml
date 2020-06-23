@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-    - master
+    - main
   pull_request: {}
 
 name: Continuous integration
@@ -58,14 +58,6 @@ jobs:
         with:
           command: test
           args: --no-default-features
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path butcher_proc_macro/Cargo.toml
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path butcher_core/Cargo.toml
 
   fmt:
     name: Rustfmt
