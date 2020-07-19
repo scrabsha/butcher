@@ -7,6 +7,7 @@ use syn::{Data, DataUnion, DeriveInput};
 
 use proc_macro2::TokenStream;
 
+mod field;
 mod structs;
 
 use structs::ButcheredStruct;
