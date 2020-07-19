@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "Procedural macros for butcher"
 repository = "https://github.com/scileo/butcher"
 documentation = "https://docs.rs/butcher"
-readme = "README.md"
+readme = "../README.md"
 categories = []
 keywords = ["rust-patterns"]
 
