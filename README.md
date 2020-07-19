@@ -20,13 +20,35 @@ production.
 
 ## Concept
 
-This crate aims to allow allow simple destructuring (for `struct`s), pattern
-matching (for `enum`s and `struct`s) and iteration (for `enum`s and `struct`s
-that implement it).
+The standard library has a [clone on write type][cow], which allows to work
+with data with either owned or borrowed data, without any distinction. However,
+this can lead to a lot of code duplication in some situations.
+
+[cow]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
+
+This crate aims to allow allow simple destructuring, pattern matching and
+iteration over data wrapped in `Cow`.
 
 ### Destructuring
 
-TODO
+The `Butcher` trait can be derived on structs. Destructuring is then made easy:
+
+```rust
+use std::borrow::Cow;
+use butcher::Butcher;
+
+#[derive(Butcher, Clone)]
+struct MyNumberList {
+    val: u32,
+    next: Option<Box<MyNumberList>>,
+}
+
+fn get_elem(i: Cow<MyNumberList>) -> Cow<u32> {
+    let ButcheredMyNumberList { val, .. } = Butcher::butcher(i);
+
+    val
+}
+```
 
 ### Pattern matching
 
