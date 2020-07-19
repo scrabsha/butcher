@@ -1,8 +1,9 @@
-//! # Quick introduction to butchering
+//! # Quick introduction to butchering on structs
 //!
 //! It is sometimes needed to destructure an object, or to pattern-match over
 //! an enum. This can lead to a lot of code duplication when such objects are
-//! wrapped in `Cow`. This macro aims to generate the boilerplate automatically.
+//! wrapped in [`Cow`]. The `Butcher` derive macro aims to generate such
+//! boilerplate automatically.
 //!
 //! We'll use a simple example of a struct with the following declaration:
 //!
@@ -16,7 +17,7 @@
 //! }
 //! ```
 //!
-//! Destructing `Client`, when it is not wrapped in a `Cow`, is very easy:
+//! Destructing `Client`, when it is not wrapped in a [`Cow`], is very easy:
 //!
 //! ```rust
 //! # #[derive(Butcher, Clone)]
@@ -37,7 +38,7 @@
 //! assert_eq!(age, 85);
 //! ```
 //!
-//! But once your `Client` is wrapped in a `Cow`, it becomes harder:
+//! But once your `Client` is wrapped in a [`Cow`], it becomes harder:
 //!
 //! ```rust
 //! #
@@ -120,12 +121,12 @@
 //! ## Regular
 //!
 //! This method is used by default. If a field has type `T`, then the
-//! corresponding butchered field will have type `T` too.
+//! corresponding butchered field will have type `Cow<T>`.
 //!
 //! ## Copy
 //!
 //! This method will always copy the data (using the `Clone` trait), instead of
-//! returning a `Cow`. This can be used for type whose size is small, such as
+//! returning a [`Cow`]. This can be used for type whose size is small, such as
 //! integers.
 //!
 //! In the previous example, the field `age` of `Client` may be marked as
@@ -136,7 +137,7 @@
 //! This method can be used when dealing with a type which also has an non-owned
 //! variant. The corresponding butchered field will have the type
 //! `<T as Deref>::Target`. For the case of a `String`, it would return a simple
-//! `Cow<str`, which is better to work on. The same goes for `PathBuf`,
+//! `Cow<str>`, which is better to work on. The same goes for `PathBuf`,
 //! `OsString`, `CString`, and so on.
 //!
 //! In the previous example, the field `name` of `Client` may be marked as
@@ -197,3 +198,5 @@
 //!     elem: &'a T,
 //! }
 //! ```
+//!
+//! [`Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
