@@ -7,9 +7,11 @@ use syn::{Data, DataUnion, DeriveInput};
 
 use proc_macro2::TokenStream;
 
+mod enums;
 mod field;
 mod structs;
 
+use enums::ButcheredEnum;
 use structs::ButcheredStruct;
 
 #[derive(Debug, PartialEq)]
@@ -45,13 +47,13 @@ impl Error for DeriveError {}
 pub(super) fn try_from(i: DeriveInput) -> Result<TokenStream, syn::Error> {
     let res = match i.data {
         Data::Struct(_) => ButcheredStruct::from(i)?.expand_to_code(),
+        Data::Enum(_) => ButcheredEnum::from(i)?.expand_to_code(),
         Data::Union(DataUnion { union_token, .. }) => {
             return Err(syn::Error::new_spanned(
                 union_token,
                 DeriveError::FoundUnion,
             ))
         }
-        Data::Enum(_) => todo!(),
     };
 
     Ok(res)

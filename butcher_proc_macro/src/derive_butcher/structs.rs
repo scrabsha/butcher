@@ -342,7 +342,7 @@ impl ButcheredStruct {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum StructKind {
+pub(super) enum StructKind {
     Named,
     Tupled,
 }
