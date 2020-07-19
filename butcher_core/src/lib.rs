@@ -9,8 +9,8 @@ pub trait ButcherField<'a> {
     fn from_owned(o: Self::Input) -> Self::Output;
 }
 
-pub trait Butcher: ToOwned {
-    type Output;
+pub trait Butcher<'cow>: ToOwned + 'cow {
+    type Output: 'cow;
 
-    fn butcher(this: Cow<Self>) -> Self::Output;
+    fn butcher(this: Cow<'cow, Self>) -> Self::Output;
 }

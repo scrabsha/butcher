@@ -2,7 +2,7 @@ use std::fmt::{Formatter, Result as FmtResult};
 
 use syn::Ident;
 
-use quote::{format_ident, IdentFragment, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, IdentFragment, ToTokens, TokenStreamExt};
 
 use proc_macro2::{Literal, TokenStream};
 
@@ -20,6 +20,26 @@ macro_rules! assert_eq_tt {
 pub(crate) enum FieldName {
     Named(Ident),
     Unnamed(usize),
+}
+
+impl FieldName {
+    pub fn expand_main_struct_field(&self) -> TokenStream {
+        match self {
+            FieldName::Named(name) => quote! { #name: },
+            FieldName::Unnamed(_) => quote! {},
+        }
+    }
+
+    pub(crate) fn expand_as_pattern_identifier(&self) -> TokenStream {
+        match self {
+            FieldName::Named(name) => quote! { #name },
+            FieldName::Unnamed(id) => {
+                // Creating an identifier from a field index
+                let id = format_ident!("field_{}", id);
+                quote! { #id }
+            }
+        }
+    }
 }
 
 impl From<Ident> for FieldName {
@@ -52,8 +72,30 @@ impl ToTokens for FieldName {
     }
 }
 
+impl PartialEq<&str> for FieldName {
+    fn eq(&self, other: &&str) -> bool {
+        matches!(self, FieldName::Named(id) if id == other)
+    }
+}
+
+impl PartialEq<usize> for FieldName {
+    fn eq(&self, other: &usize) -> bool {
+        matches!(self, FieldName::Unnamed(id) if id == other)
+    }
+}
+
+impl PartialEq<usize> for &FieldName {
+    fn eq(&self, other: &usize) -> bool {
+        *self == other
+    }
+}
+
 pub(crate) fn associated_struct_name(main_struct: &Ident, field: &FieldName) -> Ident {
     format_ident!("Butcher{}{}", main_struct, field)
+}
+
+pub(crate) fn global_associated_struct_name(initial_struct: &Ident) -> Ident {
+    format_ident!("Butchered{}", initial_struct)
 }
 
 #[cfg(test)]
@@ -67,6 +109,9 @@ mod associated_struct_name {
         let main: Ident = parse_quote! { Foo };
         let field: Ident = parse_quote! { bar };
 
-        assert_eq!(associated_struct_name(&main, &field), "ButcherFoobar");
+        assert_eq!(
+            associated_struct_name(&main, &field.into()),
+            "ButcherFoobar"
+        );
     }
 }
