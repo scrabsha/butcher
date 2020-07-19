@@ -15,8 +15,6 @@ use structs::ButcheredStruct;
 pub enum DeriveError {
     FoundUnion,
     FoundUnitStruct,
-    // TODO: remove this, handle enums
-    FoundEnum,
     MultipleButcheringMethod,
     FoundImplTrait,
     FoundMacroAsType,
@@ -29,9 +27,6 @@ impl Display for DeriveError {
         match self {
             DeriveError::FoundUnion => "Butcher does not support unions",
             DeriveError::FoundUnitStruct => "Butchering is useless for unit structs",
-            DeriveError::FoundEnum => {
-                "Butcher currently does not support enums. This is planned for next release"
-            }
             DeriveError::MultipleButcheringMethod => {
                 "Multiple butchering method provided. Choose one!"
             }

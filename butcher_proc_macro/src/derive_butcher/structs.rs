@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    iter,
-};
+use std::{collections::HashSet, iter};
 
 use syn::{
     parse::{Parse, ParseStream},
@@ -65,11 +62,10 @@ impl ButcheredStruct {
         let where_clause_for_butchered = input.generics.where_clause;
 
         let data = match input.data {
-            Data::Struct(d) => Ok(d),
-            Data::Enum(de) => Err((DeriveError::FoundEnum, de.enum_token.span)),
-            Data::Union(du) => Err((DeriveError::FoundUnion, du.union_token.span)),
-        }
-        .map_err(|(e, s)| syn::Error::new(s, e))?;
+            Data::Struct(d) => d,
+            // This should have been filtered previously
+            Data::Enum(_) | Data::Union(_) => unreachable!(),
+        };
 
         let (fields, kind) = match data.fields {
             Fields::Named(fields) => Ok((fields.named, StructKind::Named)),
