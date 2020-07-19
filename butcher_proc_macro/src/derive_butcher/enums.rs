@@ -1,4 +1,4 @@
-use syn::{Data, DeriveInput, GenericParam, Ident, Visibility, WhereClause};
+use syn::{Data, DeriveInput, GenericParam, Ident, Variant as SVariant, Visibility, WhereClause};
 
 use proc_macro2::TokenStream;
 
@@ -27,7 +27,29 @@ impl ButcheredEnum {
             Data::Struct(_) | Data::Union(_) => unreachable!(),
         };
 
-        todo!();
+        let variants = data.variants.into_iter().map(Variant::from).fold(
+            Ok(Vec::new()),
+            |acc, res| match (acc, res) {
+                (Ok(mut xs), Ok(x)) => {
+                    xs.push(x);
+                    Ok(xs)
+                }
+                (Ok(_), Err(e)) => Err(e),
+                (Err(mut main_err), Err(e)) => {
+                    main_err.combine(e);
+                    Err(main_err)
+                }
+                (tmp @ Err(_), Ok(_)) => tmp,
+            },
+        )?;
+
+        Ok(ButcheredEnum {
+            name,
+            vis,
+            variants,
+            generics_for_butchered,
+            where_clause_for_butchered,
+        })
     }
 
     pub(super) fn expand_to_code(self) -> TokenStream {
@@ -40,4 +62,10 @@ struct Variant {
     vis: Visibility,
     kind: StructKind,
     fields: Vec<Field>,
+}
+
+impl Variant {
+    fn from(_v: SVariant) -> Result<Variant, syn::Error> {
+        todo!();
+    }
 }
