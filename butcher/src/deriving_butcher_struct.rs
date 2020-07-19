@@ -94,8 +94,8 @@
 //! # Configuration options
 //!
 //! The `Butcher` procedural macro has been designed to allow special tricks,
-//! so that destructing is more intuitive. Each struct field can be destructed
-//! with a destructing method. They are all described in the next four
+//! so that destructuring is more intuitive. Each struct field can be
+//! destructured with a destructuring method. They are all described in the next
 //! paragraphs.
 //!
 //! You can use them like so:

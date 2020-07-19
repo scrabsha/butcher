@@ -11,7 +11,7 @@ mod utils;
 mod butcher_struct;
 mod derive_butcher;
 
-/// Allow simple destructing.
+/// Allow simple destructuring.
 ///
 /// This macro has the same utility as `MyStruct::butcher`, but allows to
 /// destructure only specific fields, and drop the others.

@@ -6,7 +6,7 @@
 //! while working with `Cow`s in Rust. It currently fixes two patterns:
 //! destructuring and iteration related to objects wrapped in `Cow`.
 //!
-//! ## Destructing
+//! ## Destructuring
 //!
 //! The `Butcher` trait can be used when it is necessary to destruture something
 //! wrapped in a `Cow`. Below is a simple example:
@@ -14,8 +14,6 @@
 //! ```rust
 //! use std::borrow::Cow;
 //! use butcher::Butcher;
-//! use butcher::ButcherField;
-//! use butcher::butcher_struct;
 //!
 //! #[derive(Butcher, Clone)]
 //! struct MyNumberList {
