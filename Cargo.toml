@@ -1,6 +1,5 @@
 [workspace]
 members = [
     "butcher",
-    "butcher_core",
     "butcher_proc_macro",
 ]
