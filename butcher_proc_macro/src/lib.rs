@@ -11,6 +11,10 @@ mod utils;
 mod butcher_struct;
 mod derive_butcher;
 
+/// Allow simple destructing.
+///
+/// This macro has the same utility as `MyStruct::butcher`, but allows to
+/// destructure only specific fields, and drop the others.
 #[proc_macro]
 pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as ButcheredStruct);
@@ -21,6 +25,9 @@ pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
     data.expand_to_code().into()
 }
 
+/// Derives the `Butcher` trait for a structure or an enum.
+///
+/// Currently, enums are not supported.
 #[proc_macro_derive(Butcher, attributes(butcher))]
 pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as DeriveInput);

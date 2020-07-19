@@ -6,7 +6,7 @@ use syn::{
     Ident, Result, Token,
 };
 
-use crate::utils;
+use crate::utils::{self, FieldName};
 
 pub(super) struct ButcheredStruct {
     name: Ident,
@@ -113,7 +113,7 @@ impl Parse for ButcheredStruct {
 }
 
 struct Field {
-    name: Ident,
+    name: FieldName,
 }
 
 impl Field {
@@ -139,7 +139,7 @@ impl Field {
 
 impl Parse for Field {
     fn parse(input: ParseStream) -> Result<Self> {
-        let name = input.parse::<Ident>()?;
+        let name = input.parse::<Ident>()?.into();
 
         Ok(Field { name })
     }
