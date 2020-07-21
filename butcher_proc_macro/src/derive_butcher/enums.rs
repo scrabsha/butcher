@@ -1,13 +1,17 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, iter};
 
 use syn::{
-    punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime,
-    Variant as SVariant, Visibility, WhereClause,
+    punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, LifetimeDef,
+    TypeParam, Variant as SVariant, Visibility, WhereClause,
 };
 
 use proc_macro2::TokenStream;
 
+use quote::quote;
+
 use super::{field::Field, structs::StructKind};
+
+use crate::utils;
 
 pub(super) struct ButcheredEnum {
     name: Ident,
@@ -72,7 +76,50 @@ impl ButcheredEnum {
     }
 
     pub(super) fn expand_to_code(self) -> TokenStream {
-        todo!();
+        let lt = quote! { 'cow };
+        let enum_declaration = self.expand_enum_declaration(&lt);
+        let butcher_implementation = todo!();
+
+        quote! {
+            #enum_declaration
+            // #butcher_implementation
+        }
+    }
+
+    fn expand_enum_declaration(&self, lt: &TokenStream) -> TokenStream {
+        let vis = &self.vis;
+        let where_clause = &self.where_clause_for_butchered;
+        let name_with_generics = self.enum_name_with_generics_declaration(lt);
+
+        let variants = self.variants.iter().map(|v| v.expand_in_enum(lt));
+
+        quote! {
+            #vis enum #name_with_generics
+            #where_clause
+            {
+                #( #variants ),*
+            }
+        }
+    }
+
+    fn enum_name_with_generics_declaration(&self, lt: &TokenStream) -> TokenStream {
+        let name = utils::global_associated_struct_name(&self.name);
+        let generics = self.generics_for_butchered.iter().map(|g| quote! { #g });
+
+        quote! { #name < #lt #( , #generics )* > }
+    }
+
+    fn enum_name_with_generics(&self, lt: &TokenStream) -> TokenStream {
+        let name = utils::global_associated_struct_name(&self.name);
+
+        let generics = self.generics_for_butchered.iter().map(|g| match g {
+            GenericParam::Type(TypeParam { ident, .. }) => quote! { #ident },
+            GenericParam::Lifetime(LifetimeDef { lifetime, .. }) => quote! { #lifetime },
+            // TODO: find how this should be done.
+            GenericParam::Const(_) => unimplemented!(),
+        });
+
+        quote! { #name < #lt #( , #generics )* > }
     }
 }
 
@@ -118,6 +165,28 @@ impl Variant {
             })?;
 
         Ok(Variant { name, kind, fields })
+    }
+
+    fn expand_in_enum(&self, lt: &TokenStream) -> TokenStream {
+        let name = &self.name;
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.associated_main_struct_data(lt))
+            .map(|(name, ty)| (name.expand_main_struct_field(), ty))
+            .map(|(name, ty)| quote! { #name #ty });
+
+        match self.kind {
+            VariantKind::Unit => quote! { #name },
+            VariantKind::Named => quote! {
+                #name {
+                    #( #fields ),*
+                }
+            },
+            VariantKind::Unnamed => quote! {
+                #name ( #( #fields ),* )
+            },
+        }
     }
 }
 
