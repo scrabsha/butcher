@@ -54,6 +54,7 @@
 //!
 //! [`CowIter`]: iterator/enum.CowIter.html
 
+pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
 pub mod iterator;
 
