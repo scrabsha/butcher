@@ -1,4 +1,4 @@
-use std::{collections::HashSet, iter};
+use std::{collections::HashSet};
 
 use syn::{
     punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, LifetimeDef,
@@ -7,9 +7,9 @@ use syn::{
 
 use proc_macro2::TokenStream;
 
-use quote::quote;
+use quote::{format_ident, quote};
 
-use super::{field::Field, structs::StructKind};
+use super::{field::Field};
 
 use crate::utils;
 
@@ -78,23 +78,26 @@ impl ButcheredEnum {
     pub(super) fn expand_to_code(self) -> TokenStream {
         let lt = quote! { 'cow };
         let enum_declaration = self.expand_enum_declaration(&lt);
-        let butcher_implementation = todo!();
+        let butcher_fields_implementation = self.expand_fields(&lt);
+        let butcher_implementation = self.expand_butcher_implementation(&lt);
 
         quote! {
             #enum_declaration
-            // #butcher_implementation
+            #butcher_fields_implementation
+            #butcher_implementation
         }
     }
 
     fn expand_enum_declaration(&self, lt: &TokenStream) -> TokenStream {
         let vis = &self.vis;
         let where_clause = &self.where_clause_for_butchered;
-        let name_with_generics = self.enum_name_with_generics_declaration(lt);
+        let name = self.enum_name();
+        let generics = self.generics_declaration(lt);
 
         let variants = self.variants.iter().map(|v| v.expand_in_enum(lt));
 
         quote! {
-            #vis enum #name_with_generics
+            #vis enum #name #generics
             #where_clause
             {
                 #( #variants ),*
@@ -102,16 +105,13 @@ impl ButcheredEnum {
         }
     }
 
-    fn enum_name_with_generics_declaration(&self, lt: &TokenStream) -> TokenStream {
-        let name = utils::global_associated_struct_name(&self.name);
+    fn generics_declaration(&self, lt: &TokenStream) -> TokenStream {
         let generics = self.generics_for_butchered.iter().map(|g| quote! { #g });
 
-        quote! { #name < #lt #( , #generics )* > }
+        quote! { < #lt #( , #generics )* > }
     }
 
-    fn enum_name_with_generics(&self, lt: &TokenStream) -> TokenStream {
-        let name = utils::global_associated_struct_name(&self.name);
-
+    fn generics(&self, lt: &TokenStream) -> TokenStream {
         let generics = self.generics_for_butchered.iter().map(|g| match g {
             GenericParam::Type(TypeParam { ident, .. }) => quote! { #ident },
             GenericParam::Lifetime(LifetimeDef { lifetime, .. }) => quote! { #lifetime },
@@ -119,7 +119,72 @@ impl ButcheredEnum {
             GenericParam::Const(_) => unimplemented!(),
         });
 
-        quote! { #name < #lt #( , #generics )* > }
+        quote! { < #lt #( , #generics )* > }
+    }
+
+    fn initial_generics(&self) -> TokenStream {
+        let generics = self.generics_for_butchered.iter().map(|g| match g {
+            GenericParam::Type(TypeParam { ident, .. }) => quote! { #ident },
+            GenericParam::Lifetime(LifetimeDef { lifetime, .. }) => quote! { #lifetime },
+            // TODO: find how this should be done.
+            GenericParam::Const(_) => unimplemented!(),
+        });
+
+        quote! { < #( , #generics )* > }
+    }
+
+    fn enum_name(&self) -> Ident {
+        utils::global_associated_struct_name(&self.name)
+    }
+
+    fn expand_fields(&self, lt: &TokenStream) -> TokenStream {
+        let expanded_variants = self
+            .variants
+            .iter()
+            .map(|v| v.expand_fields(lt, &self.name));
+
+        quote! {
+            #( #expanded_variants )*
+        }
+    }
+
+    fn expand_butcher_implementation(&self, lt: &TokenStream) -> TokenStream {
+        let generic_declaration = self.generics_declaration(lt);
+        let name = &self.name;
+        let initial_generics = self.initial_generics();
+        let enum_name = self.enum_name();
+        let generics = self.generics(lt);
+
+        let new_enum_name = format_ident!("Butchered{}", self.name);
+
+        let owned_arms = self
+            .variants
+            .iter()
+            .map(|v| v.owned_arm(&new_enum_name, name));
+        let borrowed_arms = self
+            .variants
+            .iter()
+            .map(|v| v.borrowed_arm(&new_enum_name, name));
+
+        quote! {
+            impl #generic_declaration
+                butcher::Butcher< #lt >
+                for #name #initial_generics
+            {
+                type Output = #enum_name #generics;
+
+                fn butcher(this: std::borrow::Cow<#lt, Self>) -> Self::Output {
+                    match this {
+                        std::borrow::Cow::Owned(this) => match this {
+                            #( #owned_arms, )*
+                        },
+                        std::borrow::Cow::Borrowed(this) => match this {
+                            #( #borrowed_arms, )*
+                        },
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -185,6 +250,108 @@ impl Variant {
             },
             VariantKind::Unnamed => quote! {
                 #name ( #( #fields ),* )
+            },
+        }
+    }
+
+    fn expand_fields(&self, lt: &TokenStream, main_name: &Ident) -> TokenStream {
+        let name = format_ident!("{}{}", main_name, self.name);
+
+        let expanded_fields = self.fields.iter().map(|f| f.expand_to_code(&name, &lt));
+
+        quote! {
+            #( #expanded_fields )*
+        }
+    }
+
+    fn pattern(&self, main_enum_name: &Ident) -> TokenStream {
+        let variant_name = &self.name;
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        match self.kind {
+            VariantKind::Unit => {
+                quote! { #main_enum_name :: #variant_name }
+            }
+            VariantKind::Named => {
+                quote! {
+                    #main_enum_name :: #variant_name { #( #fields ),* }
+                }
+            }
+            VariantKind::Unnamed => {
+                quote! {
+                    #main_enum_name :: #variant_name ( #( #fields ),* )
+                }
+            }
+        }
+    }
+
+    fn owned_arm(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+        let pattern = self.pattern(initial_enum_name);
+        let return_expr = self.owned_return_expr(main_enum_name, initial_enum_name);
+
+        quote! { #pattern => #return_expr }
+    }
+
+    fn borrowed_arm(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+        let pattern = self.pattern(initial_enum_name);
+        let return_expr = self.borrowed_return_expr(main_enum_name, initial_enum_name);
+
+        quote! { #pattern => #return_expr }
+    }
+
+    fn owned_return_expr(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+        let method = quote! { from_owned };
+        self.return_expr(main_enum_name, initial_enum_name, method)
+    }
+
+    fn borrowed_return_expr(
+        &self,
+        main_enum_name: &Ident,
+        initial_enum_name: &Ident,
+    ) -> TokenStream {
+        let method = quote! { from_borrowed };
+        self.return_expr(main_enum_name, initial_enum_name, method)
+    }
+
+    fn return_expr(
+        &self,
+        main_enum_name: &Ident,
+        initial_enum_name: &Ident,
+        method: TokenStream,
+    ) -> TokenStream {
+        let variant = &self.name;
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+        let fields_2 = fields.clone();
+
+        let name = format_ident!("{}{}", initial_enum_name, variant);
+
+        let associated_struct = self
+            .fields
+            .iter()
+            .map(|f| f.associated_struct_with_generics(&name));
+        match self.kind {
+            VariantKind::Unit => quote! {
+                #main_enum_name :: #variant
+            },
+            VariantKind::Named => quote! {
+                #main_enum_name :: #variant {
+                    #(
+                        #fields: < #associated_struct as butcher::ButcherField>:: #method ( #fields_2)
+                    ),*
+                }
+            },
+            VariantKind::Unnamed => quote! {
+                #main_enum_name :: #variant (
+                    #(
+                        < #associated_struct as butcher::ButcherField>:: #method ( #fields )
+                    ),*
+                )
             },
         }
     }
