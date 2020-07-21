@@ -1,4 +1,4 @@
-use std::{collections::HashSet};
+use std::collections::HashSet;
 
 use syn::{
     punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, LifetimeDef,
@@ -9,7 +9,7 @@ use proc_macro2::TokenStream;
 
 use quote::{format_ident, quote};
 
-use super::{field::Field};
+use super::field::Field;
 
 use crate::utils;
 
@@ -90,15 +90,20 @@ impl ButcheredEnum {
 
     fn expand_enum_declaration(&self, lt: &TokenStream) -> TokenStream {
         let vis = &self.vis;
-        let where_clause = &self.where_clause_for_butchered;
         let name = self.enum_name();
         let generics = self.generics_declaration(lt);
+        let where_items = self
+            .provided_where_clause_items()
+            .chain(self.required_where_clause_items(lt));
 
         let variants = self.variants.iter().map(|v| v.expand_in_enum(lt));
 
         quote! {
             #vis enum #name #generics
-            #where_clause
+            where
+                #(
+                    #where_items
+                ),*
             {
                 #( #variants ),*
             }
@@ -130,7 +135,7 @@ impl ButcheredEnum {
             GenericParam::Const(_) => unimplemented!(),
         });
 
-        quote! { < #( , #generics )* > }
+        quote! { < #( #generics )* > }
     }
 
     fn enum_name(&self) -> Ident {
@@ -166,10 +171,16 @@ impl ButcheredEnum {
             .iter()
             .map(|v| v.borrowed_arm(&new_enum_name, name));
 
+        let generics_items = self
+            .provided_where_clause_items()
+            .chain(self.required_where_clause_items(lt));
+
         quote! {
             impl #generic_declaration
                 butcher::Butcher< #lt >
                 for #name #initial_generics
+            where
+                #( #generics_items ),*
             {
                 type Output = #enum_name #generics;
 
@@ -185,6 +196,27 @@ impl ButcheredEnum {
                 }
             }
         }
+    }
+
+    fn provided_where_clause_items(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.where_clause_for_butchered
+            .iter()
+            .map(|predicate| quote! { #predicate })
+    }
+
+    fn required_where_clause_items<'a>(
+        &'a self,
+        lt: &'a TokenStream,
+    ) -> impl Iterator<Item = TokenStream> + 'a {
+        self.generics_for_butchered
+            .iter()
+            .flat_map(move |generic| match generic {
+                GenericParam::Type(TypeParam { ident, .. }) => Some(quote! { #ident: Clone + #lt }),
+                GenericParam::Lifetime(LifetimeDef { lifetime, .. }) => {
+                    Some(quote! { #lifetime: #lt })
+                }
+                GenericParam::Const(_) => None,
+            })
     }
 }
 

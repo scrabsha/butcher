@@ -43,7 +43,7 @@
 //! }
 //! ```
 //!
-//! Generics?
+//! Generics? Say no more:
 //!
 //! ```rust
 //! use butcher::Butcher;
@@ -53,11 +53,3 @@
 //!     Bar(T),
 //! }
 //! ```
-
-use crate::Butcher;
-
-#[derive(Clone, Butcher)]
-enum Foo<T> {
-    Bar(T),
-}
-
