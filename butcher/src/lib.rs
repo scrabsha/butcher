@@ -28,9 +28,11 @@
 //! }
 //! ```
 //!
-//! See the documentation for [`Butcher`] procedural macro for more.
+//! The `Butcher` procedural macro can be derived for [structs][butcher-struct]
+//! and for [enums][butcher-enum].
 //!
-//! [`Butcher`]: deriving_butcher_struct/index.html
+//! [butcher-struct]: deriving_butcher_struct/index.html
+//! [butcher-enum]: deriving_butcher_enum/index.html
 //!
 //! ## Iteration
 //!
@@ -54,6 +56,7 @@
 //!
 //! [`CowIter`]: iterator/enum.CowIter.html
 
+pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
 pub mod iterator;
 

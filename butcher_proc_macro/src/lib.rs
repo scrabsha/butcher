@@ -31,8 +31,7 @@ pub fn butcher_struct(tokens: TokenStream) -> TokenStream {
 #[proc_macro_derive(Butcher, attributes(butcher))]
 pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as DeriveInput);
-    derive_butcher::ButcheredStruct::from(data)
-        .map(derive_butcher::ButcheredStruct::expand_to_code)
+    derive_butcher::try_from(data)
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }
