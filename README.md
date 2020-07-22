@@ -52,7 +52,34 @@ fn get_elem(i: Cow<MyNumberList>) -> Cow<u32> {
 
 ### Pattern matching
 
-See [this gist](https://gist.github.com/5bb57b8bf4bfc08758d9cb557e1fdbfe).
+The `Butcher` trait can also be derived on enums. This allows, for example:
+
+```rust
+use butcher::Butcher;
+use std::borrow::Cow;
+
+#[derive(Butcher, Clone)]
+enum WebEvent {
+    PageLoad,
+    KeyPress(char),
+    Paste(String),
+    // or c-like structures.
+    Click { x: i64, y: i64 },
+}
+
+fn print_action(i: Cow<WebEvent>) {
+    match WebEvent::butcher(i) {
+        ButcheredWebEvent::PageLoad => { /* ... */ },
+        ButcheredWebEvent::KeyPress(key) => { /* ... */ },
+        ButcheredWebEvent::Paste(pasted) => { /* ... */ },
+        ButcheredWebEvent::Click { x, y } => { /* ... */ },
+    }
+}
+```
+
+The fields in each variant will be `Cow<T>` by default. This can be configured.
+See the documentation for more information.
+
 
 ### Iteration
 
