@@ -24,19 +24,6 @@ jobs:
         with:
           command: check
 
-  test-versions:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-
   test-features:
     name: Test Suite
     runs-on: ubuntu-latest
