@@ -55,9 +55,18 @@
 //! See the documentation of [`CowIter`] for more information.
 //!
 //! [`CowIter`]: iterator/enum.CowIter.html
+//!
+//! ## Flattening
+//!
+//! In some situations, the `Butcher` proc macro can generate tricky fields,
+//! such as nested `Cow`. The [`FlattenCow`] trait aims to remove such
+//! flattening. See [its documentation for more][`FlattenCow`].
+//!
+//! [`FlattenCow`]: flatten/trait.FlattenCow.html
 
 pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
+pub mod flatten;
 pub mod iterator;
 
 pub use butcher_proc_macro::*;
