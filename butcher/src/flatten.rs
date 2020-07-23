@@ -62,7 +62,6 @@ mod tests {
 
         assert_eq!(tmp, Cow::Owned(42));
         assert!(is_owned(tmp));
-
     }
 
     #[test]
@@ -90,6 +89,5 @@ mod tests {
 
         assert_eq!(tmp, Cow::Owned(42));
         assert!(!is_owned(tmp));
-
     }
 }
