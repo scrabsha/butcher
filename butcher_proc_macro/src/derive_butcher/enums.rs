@@ -80,6 +80,7 @@ impl ButcheredEnum {
         let enum_declaration = self.expand_enum_declaration(&lt);
         let butcher_fields_implementation = self.expand_fields(&lt);
         let butcher_implementation = self.expand_butcher_implementation(&lt);
+        println!("{}", butcher_implementation);
 
         quote! {
             #enum_declaration
@@ -99,6 +100,7 @@ impl ButcheredEnum {
         let variants = self.variants.iter().map(|v| v.expand_in_enum(lt));
 
         quote! {
+            #[derive(Clone)]
             #vis enum #name #generics
             where
                 #(
@@ -135,7 +137,7 @@ impl ButcheredEnum {
             GenericParam::Const(_) => unimplemented!(),
         });
 
-        quote! { < #( #generics )* > }
+        quote! { < #( #generics ),* > }
     }
 
     fn enum_name(&self) -> Ident {
