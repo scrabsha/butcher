@@ -1,6 +1,6 @@
 [package]
 name = "butcher_proc_macro"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Sasha <sasha.pourcelot@protonmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
