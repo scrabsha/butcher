@@ -80,7 +80,6 @@ impl ButcheredEnum {
         let enum_declaration = self.expand_enum_declaration(&lt);
         let butcher_fields_implementation = self.expand_fields(&lt);
         let butcher_implementation = self.expand_butcher_implementation(&lt);
-        println!("{}", butcher_implementation);
 
         quote! {
             #enum_declaration
