@@ -270,8 +270,8 @@ impl Variant {
             .fields
             .iter()
             .map(|f| f.associated_main_struct_data(lt))
-            .map(|(name, ty)| (name.expand_main_struct_field(), ty))
-            .map(|(name, ty)| quote! { #name #ty });
+            .map(|(name, ty, vis)| (name.expand_main_struct_field(), ty, vis))
+            .map(|(name, ty, vis)| quote! { #vis #name #ty });
 
         match self.kind {
             VariantKind::Unit => quote! { #name },

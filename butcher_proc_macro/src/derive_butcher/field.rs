@@ -214,8 +214,8 @@ impl Field {
     pub(super) fn associated_main_struct_data(
         &self,
         lt: &TokenStream,
-    ) -> (&FieldName, TokenStream) {
-        (&self.name, self.output_type_unwrapped(lt))
+    ) -> (&FieldName, TokenStream, &Visibility) {
+        (&self.name, self.output_type_unwrapped(lt), &self.vis)
     }
 }
 
