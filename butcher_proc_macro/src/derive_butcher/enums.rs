@@ -166,11 +166,11 @@ impl ButcheredEnum {
         let owned_arms = self
             .variants
             .iter()
-            .map(|v| v.owned_arm(&new_enum_name, name));
+            .map(|v| v.owned_arm(&new_enum_name, name, lt));
         let borrowed_arms = self
             .variants
             .iter()
-            .map(|v| v.borrowed_arm(&new_enum_name, name));
+            .map(|v| v.borrowed_arm(&new_enum_name, name, lt));
 
         let generics_items = self
             .provided_where_clause_items()
@@ -321,32 +321,48 @@ impl Variant {
         }
     }
 
-    fn owned_arm(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+    fn owned_arm(
+        &self,
+        main_enum_name: &Ident,
+        initial_enum_name: &Ident,
+        lt: &TokenStream,
+    ) -> TokenStream {
         let pattern = self.pattern(initial_enum_name);
-        let return_expr = self.owned_return_expr(main_enum_name, initial_enum_name);
+        let return_expr = self.owned_return_expr(main_enum_name, initial_enum_name, lt);
 
         quote! { #pattern => #return_expr }
     }
 
-    fn borrowed_arm(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+    fn borrowed_arm(
+        &self,
+        main_enum_name: &Ident,
+        initial_enum_name: &Ident,
+        lt: &TokenStream,
+    ) -> TokenStream {
         let pattern = self.pattern(initial_enum_name);
-        let return_expr = self.borrowed_return_expr(main_enum_name, initial_enum_name);
+        let return_expr = self.borrowed_return_expr(main_enum_name, initial_enum_name, lt);
 
         quote! { #pattern => #return_expr }
     }
 
-    fn owned_return_expr(&self, main_enum_name: &Ident, initial_enum_name: &Ident) -> TokenStream {
+    fn owned_return_expr(
+        &self,
+        main_enum_name: &Ident,
+        initial_enum_name: &Ident,
+        lt: &TokenStream,
+    ) -> TokenStream {
         let method = quote! { from_owned };
-        self.return_expr(main_enum_name, initial_enum_name, method)
+        self.return_expr(main_enum_name, initial_enum_name, method, lt)
     }
 
     fn borrowed_return_expr(
         &self,
         main_enum_name: &Ident,
         initial_enum_name: &Ident,
+        lt: &TokenStream,
     ) -> TokenStream {
         let method = quote! { from_borrowed };
-        self.return_expr(main_enum_name, initial_enum_name, method)
+        self.return_expr(main_enum_name, initial_enum_name, method, lt)
     }
 
     fn return_expr(
@@ -354,6 +370,7 @@ impl Variant {
         main_enum_name: &Ident,
         initial_enum_name: &Ident,
         method: TokenStream,
+        lt: &TokenStream,
     ) -> TokenStream {
         let variant = &self.name;
         let fields = self
@@ -368,6 +385,9 @@ impl Variant {
             .fields
             .iter()
             .map(|f| f.associated_struct_with_generics(&name));
+
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
         match self.kind {
             VariantKind::Unit => quote! {
                 #main_enum_name :: #variant
@@ -375,14 +395,14 @@ impl Variant {
             VariantKind::Named => quote! {
                 #main_enum_name :: #variant {
                     #(
-                        #fields: < #associated_struct as butcher::ButcherField>:: #method ( #fields_2)
+                        #fields: < #associated_struct as butcher::methods::ButcherField<#lt, #associated_struct_types>>:: #method ( #fields_2)
                     ),*
                 }
             },
             VariantKind::Unnamed => quote! {
                 #main_enum_name :: #variant (
                     #(
-                        < #associated_struct as butcher::ButcherField>:: #method ( #fields )
+                        < #associated_struct as butcher::methods::ButcherField<#lt, #associated_struct_types>>:: #method ( #fields )
                     ),*
                 )
             },

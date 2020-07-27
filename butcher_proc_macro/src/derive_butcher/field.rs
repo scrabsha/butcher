@@ -20,18 +20,8 @@ fn cow() -> TokenStream {
     quote! { std::borrow::Cow }
 }
 
-fn borrowed() -> TokenStream {
-    let cow = cow();
-    quote! { #cow :: Borrowed }
-}
-
-fn owned() -> TokenStream {
-    let cow = cow();
-    quote! { #cow :: Owned }
-}
-
 fn butcher_field() -> TokenStream {
-    quote! { butcher::ButcherField }
+    quote! { butcher::methods::ButcherField }
 }
 
 fn phantom() -> TokenStream {
@@ -147,23 +137,17 @@ impl Field {
 
         let where_clause = self.where_clause_trait(&lt);
 
-        let input_type = self.input_type();
-        let output_type = self.output_type(&lt);
+        let input_type = &self.ty;
 
-        let borrowed_function = self.method.expand_borrowed_function(&lt);
-        let owned_function = self.method.expand_owned_function();
+        let method = self.method.associated_method_name();
 
         quote! {
             impl
                 <#lt, #( #lifetimes, )* #( #generic_types ),*>
-                #butcher_field<#lt> for #struct_with_generics
+                #butcher_field<#lt, #input_type> for #struct_with_generics
                 #where_clause
             {
-                #input_type
-                #output_type
-
-                #borrowed_function
-                #owned_function
+                type Method = #method;
             }
         }
     }
@@ -196,15 +180,6 @@ impl Field {
             where
                 #( #items ),*
         }
-    }
-
-    fn input_type(&self) -> TokenStream {
-        let ty = &self.ty;
-        quote! { type Input = #ty; }
-    }
-
-    fn output_type(&self, lt: &TokenStream) -> TokenStream {
-        self.method.output_type_for(&self.ty, lt)
     }
 
     fn output_type_unwrapped(&self, lt: &TokenStream) -> TokenStream {
@@ -456,46 +431,12 @@ impl ButcheringMethod {
         }
     }
 
-    fn output_type_for(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
-        let ty = self.output_type_unwrapped(ty, lt);
-        quote! { type Output = #ty; }
-    }
-
-    fn expand_borrowed_function(&self, lt: impl ToTokens) -> TokenStream {
-        let var_name = quote! { b };
-
-        let borrowed = borrowed();
-
-        let function_body = match self {
-            ButcheringMethod::Copy => quote! { #var_name.clone() },
-            ButcheringMethod::Flatten => quote! { #borrowed(std::ops::Deref::deref(#var_name)) },
-            ButcheringMethod::Regular => quote! { #borrowed(#var_name) },
-            ButcheringMethod::Unbox => quote! { #borrowed(std::ops::Deref::deref(#var_name)) },
-        };
-
-        quote! {
-            fn from_borrowed(#var_name: & #lt Self::Input) -> Self::Output {
-                #function_body
-            }
-        }
-    }
-
-    fn expand_owned_function(&self) -> TokenStream {
-        let var_name = quote! { o };
-
-        let owned = owned();
-
-        let function_body = match self {
-            ButcheringMethod::Copy => quote! { #var_name },
-            ButcheringMethod::Flatten => quote! { #owned(#var_name.into()) },
-            ButcheringMethod::Regular => quote! { #owned(#var_name) },
-            ButcheringMethod::Unbox => quote! { #owned(*#var_name) },
-        };
-
-        quote! {
-            fn from_owned(#var_name: Self::Input) -> Self::Output {
-                #function_body
-            }
+    fn associated_method_name(self) -> TokenStream {
+        match self {
+            ButcheringMethod::Copy => quote! { butcher::methods::Copy },
+            ButcheringMethod::Flatten => quote! { butcher::methods::Flatten },
+            ButcheringMethod::Regular => quote! { butcher::methods::Regular },
+            ButcheringMethod::Unbox => quote! { butcher::methods::Unbox },
         }
     }
 }

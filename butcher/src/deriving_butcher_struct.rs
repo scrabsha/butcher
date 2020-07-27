@@ -123,6 +123,8 @@
 //! This method is used by default. If a field has type `T`, then the
 //! corresponding butchered field will have type `Cow<T>`.
 //!
+//! See the documentation for [`Regular`] for more information.
+//!
 //! ## Copy
 //!
 //! This method will always copy the data (using the `Clone` trait), instead of
@@ -132,25 +134,24 @@
 //! In the previous example, the field `age` of `Client` may be marked as
 //! `copy`.
 //!
+//! See the documentation for [`Copy`] for more information.
+//!
 //! ## Flatten
 //!
-//! This method can be used when dealing with a type which also has an non-owned
-//! variant. The corresponding butchered field will have the type
-//! `<T as Deref>::Target`. For the case of a `String`, it would return a simple
-//! `Cow<str>`, which is better to work on. The same goes for `PathBuf`,
-//! `OsString`, `CString`, and so on.
+//! This method is used for situations when data can be represented both with
+//! its borrowed and its owned form. For instance, `[T]` is borrowed while
+//! `Vec<T>` is owned. Here, using `flatten` on a field whose type is `Vec<T>`
+//! will convert it into `Cow<[T]>`.
 //!
-//! In the previous example, the field `name` of `Client` may be marked as
-//! `Flatten`.
-//!
-//! In order to use such butchering method to your own data structures, you
-//! must implement the `Deref` and the dereferenced type must implement
-//! `ToOwned` so that `<<T as Deref>::Target as ToOwned>::Owned == T`.
+//! See the documentation for [`Flatten`] for more information.
 //!
 //! ## Unbox
 //!
 //! An usage of `Box` on sized types is to create recursive types. This
-//! butchering method will allow one to automatically get the data from the box.
+//! butchering method will allow one to automatically get the data from the
+//! `Box`.
+//!
+//! See the documentation for [`Unbox`] for more information.
 //!
 //! ## Fixing triggered compilation errors
 //!
@@ -158,45 +159,46 @@
 //! try, it may become tricky when generics are involved. The next section will
 //! show how to fix most errors.
 //!
-//! ### A reference to a generic type
+//! Most of the errors raised when using the macro are trait-bound related. For
+//! instance, the following example does not compile:
 //!
-//! The following example does not compile:
-//!
-//! ```compile_fail
+//! ```no_compile
 //! use butcher::Butcher;
 //!
 //! #[derive(Butcher, Clone)]
-//! struct Foo<'a, T> {
-//!     elem: &'a T,
+//! struct Foo<T> {
+//!     #[butcher(flatten)]
+//!     elem: Vec<T>,
 //! }
 //! ```
 //!
 //! It gives us the following error:
 //!
 //! ```none
-//! error[E0309]: the parameter type `T` may not live long enough
-//!  --> src/deriving_butcher_struct.rs:170:10
+//! error[E0277]: the trait bound `[T]: std::borrow::ToOwned` is not satisfied
+//!  --> src/deriving_butcher_struct.rs:167:10
 //!   |
 //! 6 | #[derive(Butcher, Clone)]
-//!   |          ^^^^^^^ ...so that the reference type `&'a T` does not outlive the data it points at
-//! 7 | struct Foo<'a, T> {
-//! 8 |     elem: &'a T,
-//!   |               - help: consider adding an explicit lifetime bound...: `T: 'a`
+//!   |          ^^^^^^^ the trait `std::borrow::ToOwned` is not implemented for `[T]`
 //!   |
 //!   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 //! ```
 //!
-//! In order to fix it, it is needed to specify the lifetime bound, so that
-//! the procedural macro can specify it too. It can be defined like so:
+//! So here it is necessary to indicate that `T` must be `Clone`. It can be
+//! specified right after the butchering method:
 //!
 //! ```rust
 //! use butcher::Butcher;
 //!
 //! #[derive(Butcher, Clone)]
-//! struct Foo<'a, T> {
-//!     #[butcher(regular, T: 'a)]
-//!     elem: &'a T,
+//! struct Foo<T> {
+//!     #[butcher(flatten, T: Clone)]
+//!     elem: Vec<T>,
 //! }
 //! ```
 //!
 //! [`Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
+//! [`Regular`]: ../methods/struct.Regular.html
+//! [`Copy`]: ../methods/struct.Copy.html
+//! [`Flatten`]: ../methods/struct.Flatten.html
+//! [`Unbox`]: ../methods/struct.Unbox.html

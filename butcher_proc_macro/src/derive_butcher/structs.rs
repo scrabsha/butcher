@@ -187,8 +187,8 @@ impl ButcheredStruct {
         let output_type = utils::global_associated_struct_name(&self.name);
         let generics_for_output = iter::once(lt.clone()).chain(generics_usage.clone());
 
-        let borrowed_arm = self.borrowed_match_arm();
-        let owned_arm = self.owned_match_arm();
+        let borrowed_arm = self.borrowed_match_arm(lt);
+        let owned_arm = self.owned_match_arm(lt);
 
         quote! {
             impl< #( #generics_declaration ),* >
@@ -198,7 +198,7 @@ impl ButcheredStruct {
             {
                 type Output = #output_type < #( #generics_for_output ),* >;
 
-                fn butcher(this: std::borrow::Cow<'cow, Self>) -> Self::Output {
+                fn butcher(this: std::borrow::Cow<#lt, Self>) -> Self::Output {
                     match this {
                         #borrowed_arm,
                         #owned_arm,
@@ -229,9 +229,9 @@ impl ButcheredStruct {
         })
     }
 
-    fn borrowed_match_arm(&self) -> TokenStream {
+    fn borrowed_match_arm(&self, lt: &TokenStream) -> TokenStream {
         let pattern = self.borrowed_pattern();
-        let return_expr = self.borrowed_return_expr();
+        let return_expr = self.borrowed_return_expr(lt);
 
         quote! {
             #pattern => #return_expr
@@ -246,7 +246,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn borrowed_return_expr(&self) -> TokenStream {
+    fn borrowed_return_expr(&self, lt: &TokenStream) -> TokenStream {
         let return_type_name = utils::global_associated_struct_name(&self.name);
         let fields = self
             .fields
@@ -259,26 +259,28 @@ impl ButcheredStruct {
             .iter()
             .map(|f| f.associated_struct_with_generics(&self.name));
 
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
         match self.kind {
             StructKind::Named => {
                 quote! {
                     #return_type_name {
-                        #( #fields: <#associated_structs as butcher::ButcherField>::from_borrowed( #fields_2 ) ),*
+                        #( #fields: <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_borrowed( #fields_2 ) ),*
                     }
                 }
             }
 
             StructKind::Tupled => quote! {
                 #return_type_name(
-                    #( <#associated_structs as butcher::ButcherField>::from_borrowed( #fields_2 ) ),*
+                    #( <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_borrowed( #fields_2 ) ),*
                 )
             },
         }
     }
 
-    fn owned_match_arm(&self) -> TokenStream {
+    fn owned_match_arm(&self, lt: &TokenStream) -> TokenStream {
         let pattern = self.owned_pattern();
-        let return_expr = self.owned_return_expr();
+        let return_expr = self.owned_return_expr(lt);
 
         quote! {
             #pattern => #return_expr
@@ -293,7 +295,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn owned_return_expr(&self) -> TokenStream {
+    fn owned_return_expr(&self, lt: &TokenStream) -> TokenStream {
         let return_type_name = utils::global_associated_struct_name(&self.name);
         let fields = self
             .fields
@@ -307,18 +309,20 @@ impl ButcheredStruct {
             // .map(|f| utils::associated_struct_name(&self.name, &f.name));
             .map(|f| f.associated_struct_with_generics(&self.name));
 
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
         match self.kind {
             StructKind::Named => {
                 quote! {
                     #return_type_name {
-                        #( #fields: <#associated_structs as butcher::ButcherField>::from_owned( #fields_2 ) ),*
+                        #( #fields: <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_owned( #fields_2 ) ),*
                     }
                 }
             }
 
             StructKind::Tupled => quote! {
                 #return_type_name(
-                    #( <#associated_structs as butcher::ButcherField>::from_owned( #fields ) ),*
+                    #( <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_owned( #fields ) ),*
                 )
             },
         }
@@ -347,6 +351,7 @@ pub(super) enum StructKind {
     Tupled,
 }
 
+/*
 #[cfg(test)]
 mod butchered_struct {
     use super::*;
@@ -845,3 +850,4 @@ mod field {
         assert_eq_tt!(left, right);
     }
 }
+*/
