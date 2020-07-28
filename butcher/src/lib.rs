@@ -66,7 +66,7 @@
 
 pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
-pub mod flatten;
+pub mod unnest;
 pub mod iterator;
 pub mod methods;
 
