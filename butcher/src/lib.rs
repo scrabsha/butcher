@@ -68,19 +68,11 @@ pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
 pub mod flatten;
 pub mod iterator;
+pub mod methods;
 
 pub use butcher_proc_macro::*;
 
 use std::borrow::Cow;
-
-pub trait ButcherField<'a> {
-    type Input;
-    type Output: ToOwned + Sized + 'a;
-
-    fn from_borrowed(b: &'a Self::Input) -> Self::Output;
-
-    fn from_owned(o: Self::Input) -> Self::Output;
-}
 
 pub trait Butcher<'cow>: ToOwned + 'cow {
     type Output: 'cow;

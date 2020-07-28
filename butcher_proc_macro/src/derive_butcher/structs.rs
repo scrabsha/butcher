@@ -187,8 +187,8 @@ impl ButcheredStruct {
         let output_type = utils::global_associated_struct_name(&self.name);
         let generics_for_output = iter::once(lt.clone()).chain(generics_usage.clone());
 
-        let borrowed_arm = self.borrowed_match_arm();
-        let owned_arm = self.owned_match_arm();
+        let borrowed_arm = self.borrowed_match_arm(lt);
+        let owned_arm = self.owned_match_arm(lt);
 
         quote! {
             impl< #( #generics_declaration ),* >
@@ -198,7 +198,7 @@ impl ButcheredStruct {
             {
                 type Output = #output_type < #( #generics_for_output ),* >;
 
-                fn butcher(this: std::borrow::Cow<'cow, Self>) -> Self::Output {
+                fn butcher(this: std::borrow::Cow<#lt, Self>) -> Self::Output {
                     match this {
                         #borrowed_arm,
                         #owned_arm,
@@ -229,9 +229,9 @@ impl ButcheredStruct {
         })
     }
 
-    fn borrowed_match_arm(&self) -> TokenStream {
+    fn borrowed_match_arm(&self, lt: &TokenStream) -> TokenStream {
         let pattern = self.borrowed_pattern();
-        let return_expr = self.borrowed_return_expr();
+        let return_expr = self.borrowed_return_expr(lt);
 
         quote! {
             #pattern => #return_expr
@@ -246,7 +246,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn borrowed_return_expr(&self) -> TokenStream {
+    fn borrowed_return_expr(&self, lt: &TokenStream) -> TokenStream {
         let return_type_name = utils::global_associated_struct_name(&self.name);
         let fields = self
             .fields
@@ -259,26 +259,28 @@ impl ButcheredStruct {
             .iter()
             .map(|f| f.associated_struct_with_generics(&self.name));
 
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
         match self.kind {
             StructKind::Named => {
                 quote! {
                     #return_type_name {
-                        #( #fields: <#associated_structs as butcher::ButcherField>::from_borrowed( #fields_2 ) ),*
+                        #( #fields: <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_borrowed( #fields_2 ) ),*
                     }
                 }
             }
 
             StructKind::Tupled => quote! {
                 #return_type_name(
-                    #( <#associated_structs as butcher::ButcherField>::from_borrowed( #fields_2 ) ),*
+                    #( <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_borrowed( #fields_2 ) ),*
                 )
             },
         }
     }
 
-    fn owned_match_arm(&self) -> TokenStream {
+    fn owned_match_arm(&self, lt: &TokenStream) -> TokenStream {
         let pattern = self.owned_pattern();
-        let return_expr = self.owned_return_expr();
+        let return_expr = self.owned_return_expr(lt);
 
         quote! {
             #pattern => #return_expr
@@ -293,7 +295,7 @@ impl ButcheredStruct {
         }
     }
 
-    fn owned_return_expr(&self) -> TokenStream {
+    fn owned_return_expr(&self, lt: &TokenStream) -> TokenStream {
         let return_type_name = utils::global_associated_struct_name(&self.name);
         let fields = self
             .fields
@@ -307,18 +309,20 @@ impl ButcheredStruct {
             // .map(|f| utils::associated_struct_name(&self.name, &f.name));
             .map(|f| f.associated_struct_with_generics(&self.name));
 
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
         match self.kind {
             StructKind::Named => {
                 quote! {
                     #return_type_name {
-                        #( #fields: <#associated_structs as butcher::ButcherField>::from_owned( #fields_2 ) ),*
+                        #( #fields: <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_owned( #fields_2 ) ),*
                     }
                 }
             }
 
             StructKind::Tupled => quote! {
                 #return_type_name(
-                    #( <#associated_structs as butcher::ButcherField>::from_owned( #fields ) ),*
+                    #( <#associated_structs as butcher::methods::ButcherField<#lt, #associated_struct_types>>::from_owned( #fields ) ),*
                 )
             },
         }
@@ -345,503 +349,4 @@ impl ButcheredStruct {
 pub(super) enum StructKind {
     Named,
     Tupled,
-}
-
-#[cfg(test)]
-mod butchered_struct {
-    use super::*;
-
-    use syn::DeriveInput;
-
-    use quote::quote;
-    use syn::parse_quote;
-
-    use crate::derive_butcher::field::ButcheringMethod;
-
-    #[test]
-    fn serialization_named_struct() {
-        let input: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a, T> {
-                #[butcher(copy)]
-                pub a: &'a str,
-                #[butcher(flatten)]
-                pub(super) b: String,
-                c: T,
-                #[butcher(unbox)]
-                pub(crate) d: Box<T>,
-                #[butcher(regular)]
-                e: (),
-                f: (),
-            }
-        };
-
-        let bs = ButcheredStruct::from(input).unwrap();
-        assert_eq!(bs.name, "Foo");
-
-        assert_eq!(bs.fields[0].name, "a");
-        assert_eq!(bs.fields[0].method, ButcheringMethod::Copy);
-        assert!(bs.fields[4].associated_generics.is_empty());
-
-        assert_eq!(bs.fields[1].name, "b");
-        assert_eq!(bs.fields[1].method, ButcheringMethod::Flatten);
-        assert!(bs.fields[4].associated_generics.is_empty());
-
-        assert_eq!(bs.fields[2].name, "c");
-        assert_eq!(bs.fields[2].method, ButcheringMethod::Regular);
-        assert_eq!(bs.fields[2].associated_generics, &["T"]);
-
-        assert_eq!(bs.fields[3].name, "d");
-        assert_eq!(bs.fields[3].method, ButcheringMethod::Unbox);
-        assert_eq!(bs.fields[3].associated_generics, &["T"]);
-
-        assert_eq!(bs.fields[4].name, "e");
-        assert_eq!(bs.fields[4].method, ButcheringMethod::Regular);
-        assert!(bs.fields[4].associated_generics.is_empty());
-
-        assert_eq!(bs.fields[5].name, "f");
-        assert_eq!(bs.fields[5].method, ButcheringMethod::Regular);
-        assert!(bs.fields[5].associated_generics.is_empty());
-
-        let tmp = &bs.fields[0].ty;
-        let left = quote! { #tmp };
-        let right = quote! { &'a str };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[1].ty;
-        let left = quote! { #tmp };
-        let right = quote! { String };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[2].ty;
-        let left = quote! { #tmp };
-        let right = quote! { T };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[3].ty;
-        let left = quote! { #tmp };
-        let right = quote! { Box<T> };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[4].ty;
-        let left = quote! { #tmp };
-        let right = quote! { () };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[5].ty;
-        let left = quote! { #tmp };
-        let right = quote! { () };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[0].vis;
-        let left = quote! { #tmp };
-        let right = quote! { pub };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[1].vis;
-        let left = quote! { #tmp };
-        let right = quote! { pub(super) };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[2].vis;
-        let left = quote! { #tmp };
-        let right = TokenStream::new();
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[3].vis;
-        let left = quote! { #tmp };
-        let right = quote! { pub(crate) };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[4].vis;
-        let left = quote! { #tmp };
-        let right = TokenStream::new();
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[5].vis;
-        let left = quote! { #tmp };
-        let right = TokenStream::new();
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn serialization_tupled_struct() {
-        let input: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo(
-                #[butcher(flatten)]
-                Box<str>,
-                #[butcher(copy)]
-                usize,
-            );
-        };
-
-        let bs = ButcheredStruct::from(input).unwrap();
-
-        assert_eq!(bs.name, "Foo");
-
-        assert_eq!(&bs.fields[0].name, 0);
-        assert_eq!(&bs.fields[1].name, 1);
-
-        let tmp = &bs.fields[0].ty;
-        let left = quote! { #tmp };
-        let right = quote! { Box<str> };
-        assert_eq_tt!(left, right);
-
-        let tmp = &bs.fields[1].ty;
-        let left = quote! { #tmp };
-        let right = quote! { usize };
-        assert_eq_tt!(left, right);
-
-        assert_eq!(bs.fields[0].method, ButcheringMethod::Flatten);
-        assert_eq!(bs.fields[1].method, ButcheringMethod::Copy);
-    }
-}
-
-#[cfg(test)]
-mod field {
-    use super::*;
-
-    use syn::parse_quote;
-
-    #[test]
-    fn associated_struct_declaration() {
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo {
-                a: usize,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].associated_struct_declaration(&bs.name);
-        let right = quote! {
-            #[allow(non_camel_case_types)]
-            struct ButcherFooa<>(
-                std::marker::PhantomData<()>,
-                std::marker::PhantomData<()>,
-            );
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<T> {
-                a: T,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].associated_struct_declaration(&bs.name);
-        let right = quote! {
-            #[allow(non_camel_case_types)]
-            struct ButcherFooa<T,>(
-                std::marker::PhantomData<(T,)>,
-                std::marker::PhantomData<()>,
-            );
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a> {
-                a: A<'a>,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].associated_struct_declaration(&bs.name);
-        let right = quote! {
-            #[allow(non_camel_case_types)]
-            struct ButcherFooa<'a,>(
-                std::marker::PhantomData<()>,
-                std::marker::PhantomData<(&'a (),)>,
-            );
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a, T,> {
-                a: &'a T,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].associated_struct_declaration(&bs.name);
-        let right = quote! {
-            #[allow(non_camel_case_types)]
-            struct ButcherFooa<'a, T,>(
-                std::marker::PhantomData<(T,)>,
-                std::marker::PhantomData<(&'a (),)>,
-            );
-        };
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn butcher_field_implementation_regular() {
-        let lt = quote! { 'cow };
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo {
-                a: usize,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow,> butcher::ButcherField<'cow> for ButcherFooa<>
-            where
-                usize: Clone
-            {
-                type Input = usize;
-                type Output = std::borrow::Cow<'cow, usize>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b)
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a> {
-                a: &'a usize,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, 'a,> butcher::ButcherField<'cow> for ButcherFooa<'a,>
-            where
-                &'a usize: Clone,
-                'a: 'cow
-            {
-                type Input = &'a usize;
-                type Output = std::borrow::Cow<'cow, &'a usize>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b)
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<T> {
-                a: T,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, T> butcher::ButcherField<'cow> for ButcherFooa<T,>
-            where
-                T: Clone,
-                T: 'cow
-            {
-                type Input = T;
-                type Output = std::borrow::Cow<'cow, T>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(b)
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn butcher_field_implementation_copy() {
-        let lt = quote! { 'cow };
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo {
-                #[butcher(copy)]
-                a: usize,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow,> butcher::ButcherField<'cow> for ButcherFooa<>
-            where
-                usize: Clone
-            {
-                type Input = usize;
-                type Output = usize;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    b.clone()
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    o
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a> {
-                #[butcher(copy)]
-                a: &'a usize,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, 'a,> butcher::ButcherField<'cow> for ButcherFooa<'a,>
-            where
-                &'a usize: Clone,
-                'a: 'cow
-            {
-                type Input = &'a usize;
-                type Output = &'a usize;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    b.clone()
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    o
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<T> {
-                #[butcher(copy)]
-                a: T,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, T> butcher::ButcherField<'cow> for ButcherFooa<T,>
-            where
-                T: Clone,
-                T: 'cow
-            {
-                type Input = T;
-                type Output = T;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    b.clone()
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    o
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-    }
-
-    #[test]
-    fn butcher_field_implementation_dereferenced() {
-        let lt = quote! { 'cow };
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo {
-                #[butcher(unbox)]
-                a: Box<usize>,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow,> butcher::ButcherField<'cow> for ButcherFooa<>
-            where
-                <Box<usize> as std::ops::Deref>::Target: Clone
-            {
-                type Input = Box<usize>;
-                type Output = std::borrow::Cow<'cow, <Box<usize> as std::ops::Deref>::Target>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(*o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<'a> {
-                #[butcher(unbox)]
-                a: Box<&'a usize>,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        assert_eq!(bs.fields[0].associated_lifetimes.len(), 1);
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, 'a,> butcher::ButcherField<'cow> for ButcherFooa<'a,>
-            where
-                <Box<&'a usize> as std::ops::Deref>::Target: Clone,
-                'a: 'cow
-            {
-                type Input = Box<&'a usize>;
-                type Output = std::borrow::Cow<'cow, <Box<&'a usize> as std::ops::Deref>::Target>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(*o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-
-        let s: DeriveInput = parse_quote! {
-            #[derive(Butcher)]
-            struct Foo<T> {
-                #[butcher(unbox)]
-                a: Box<T>,
-            }
-        };
-        let bs = ButcheredStruct::from(s).unwrap();
-        let left = bs.fields[0].butcher_field_implementation(&bs.name, &lt);
-        let right = quote! {
-            impl<'cow, T> butcher::ButcherField<'cow> for ButcherFooa<T,>
-            where
-                <Box<T> as std::ops::Deref>::Target: Clone,
-                T: 'cow
-            {
-                type Input = Box<T>;
-                type Output = std::borrow::Cow<'cow, <Box<T> as std::ops::Deref>::Target>;
-
-                fn from_borrowed(b: &'cow Self::Input) -> Self::Output {
-                    std::borrow::Cow::Borrowed(std::ops::Deref::deref(b))
-                }
-
-                fn from_owned(o: Self::Input) -> Self::Output {
-                    std::borrow::Cow::Owned(*o)
-                }
-            }
-        };
-        assert_eq_tt!(left, right);
-    }
 }
