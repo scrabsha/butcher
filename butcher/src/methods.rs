@@ -18,6 +18,8 @@
 use std::borrow::{Borrow, Cow};
 use std::ops::Deref;
 
+use crate::Butcher;
+
 /// Allow to unify the behavior of the different butchering methods.
 ///
 /// `T` is the input type, which can be either owned or borrowed for `'cow`. The
@@ -155,6 +157,57 @@ where
     }
 }
 
+/// The rebutcher method.
+///
+/// This method will butcher again the type which is marked as such.
+///
+/// # Example
+///
+/// In the following code, we destructure a struct inside another struct:
+///
+/// ```rust
+/// use butcher::Butcher;
+/// use std::borrow::Cow;
+///
+/// #[derive(Butcher, Clone)]
+/// struct Foo {
+///     #[butcher(rebutcher)]
+///     bar: Bar,
+/// }
+/// #[derive(Butcher, Clone)]
+/// struct Bar(usize);
+///
+/// let input = Foo { bar: Bar(42) };
+/// let input = Cow::Borrowed(&input);
+///
+/// let ButcheredFoo { bar: ButcheredBar(value) } = Foo::butcher(input);
+///
+/// assert_eq!(value, Cow::Owned(42));
+/// ```
+///
+/// It requires the type to implement `Butcher` and to implement [`ToOwned`]
+/// such that `<T as ToOwned>::Owned = T`. The latter requirement can be
+/// implemented with the [`Clone`] trait.
+///
+/// [`ToOwned`]: https://doc.rust-lang.org/std/borrow/trait.ToOwned.html
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+pub struct Rebutcher;
+
+impl<'cow, T> ButcheringMethod<'cow, T> for Rebutcher
+where
+    T: Butcher<'cow> + ToOwned<Owned = T> + 'cow,
+{
+    type Output = <T as Butcher<'cow>>::Output;
+
+    fn from_owned(i: T) -> Self::Output {
+        <T as Butcher>::butcher(Cow::Owned(i))
+    }
+
+    fn from_borrowed(i: &'cow T) -> Self::Output {
+        <T as Butcher>::butcher(Cow::Borrowed(i))
+    }
+}
+
 /// Define the behaviour of a specific field of a struct or enum when it is
 /// butchered.
 ///
@@ -175,3 +228,15 @@ where
         <Self::Method as ButcheringMethod<'cow, T>>::from_borrowed(i)
     }
 }
+
+/*
+use crate::Butcher;
+
+#[derive(Butcher, Clone)]
+struct Foo {
+    #[butcher(rebutcher)]
+    bar: Bar,
+}
+#[derive(Butcher, Clone)]
+struct Bar(usize);
+*/

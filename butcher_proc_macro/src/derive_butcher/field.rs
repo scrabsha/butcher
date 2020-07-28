@@ -156,7 +156,7 @@ impl Field {
         &'a self,
         lt: &'a TokenStream,
     ) -> impl Iterator<Item = TokenStream> + 'a {
-        let required_by_method = self.method.required_traits_for(&self.ty);
+        let required_by_method = self.method.required_traits_for(&self.ty, lt);
 
         let bounds_for_generic_types = self
             .associated_generics
@@ -401,16 +401,23 @@ fn extend_discovered<T>(
 pub(super) enum ButcheringMethod {
     Copy,
     Flatten,
+    Rebutcher,
     Regular,
     Unbox,
 }
 
 impl ButcheringMethod {
-    fn required_traits_for(&self, ty: &Type) -> TokenStream {
+    fn required_traits_for(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
         match self {
             ButcheringMethod::Copy => quote! { #ty: Clone },
             ButcheringMethod::Flatten => {
                 quote! { #ty: Into<<<#ty as std::ops::Deref>::Target as ToOwned>::Owned> }
+            }
+            ButcheringMethod::Rebutcher => {
+                quote! {
+                    #ty : Butcher< #lt > + ToOwned<Owned = #ty > + #lt,
+                    <#ty as butcher::Butcher< #lt >>:: Output: Clone,
+                }
             }
             ButcheringMethod::Regular => quote! { #ty: Clone },
             ButcheringMethod::Unbox => quote! { <#ty as std::ops::Deref>::Target: Clone },
@@ -424,6 +431,9 @@ impl ButcheringMethod {
                 let cow = cow();
                 quote! { #cow < #lt , <#ty as std::ops::Deref>::Target > }
             }
+            ButcheringMethod::Rebutcher => {
+                quote! { < #ty as Butcher< #lt >>::Output }
+            }
             ButcheringMethod::Regular => {
                 let cow = cow();
                 quote! { #cow < #lt , #ty > }
@@ -435,6 +445,7 @@ impl ButcheringMethod {
         match self {
             ButcheringMethod::Copy => quote! { butcher::methods::Copy },
             ButcheringMethod::Flatten => quote! { butcher::methods::Flatten },
+            ButcheringMethod::Rebutcher => quote! { butcher::methods::Rebutcher },
             ButcheringMethod::Regular => quote! { butcher::methods::Regular },
             ButcheringMethod::Unbox => quote! { butcher::methods::Unbox },
         }
@@ -449,6 +460,8 @@ impl Parse for ButcheringMethod {
             Ok(ButcheringMethod::Copy)
         } else if i == "flatten" {
             Ok(ButcheringMethod::Flatten)
+        } else if i == "rebutcher" {
+            Ok(ButcheringMethod::Rebutcher)
         } else if i == "regular" {
             Ok(ButcheringMethod::Regular)
         } else if i == "unbox" {
