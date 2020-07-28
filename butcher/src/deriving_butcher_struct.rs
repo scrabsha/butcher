@@ -153,6 +153,14 @@
 //!
 //! See the documentation for [`Unbox`] for more information.
 //!
+//! ## Rebutcher
+//!
+//! Sometimes it is necessary to butcher again a field of a butchered struct.
+//! This is what rebutcher does. This can be helpfull when it is necessay to
+//! destructure/pattern match on a struct contained in another struct.
+//!
+//! See the documentation for [`Rebutcher`] for more information.
+//!
 //! ## Fixing triggered compilation errors
 //!
 //! While this proc macro generally generates code that compile on the first
@@ -205,7 +213,8 @@
 //! [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 //! [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 //! [`WhereClauseItem`]: https://doc.rust-lang.org/reference/items/generics.html#where-clauses
-//! [`Regular`]: ../methods/struct.Regular.html
 //! [`Copy`]: ../methods/struct.Copy.html
 //! [`Flatten`]: ../methods/struct.Flatten.html
+//! [`Rebutcher`]: ../methods/struct.Rebutcher.html
+//! [`Regular`]: ../methods/struct.Regular.html
 //! [`Unbox`]: ../methods/struct.Unbox.html
