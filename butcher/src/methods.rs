@@ -228,15 +228,3 @@ where
         <Self::Method as ButcheringMethod<'cow, T>>::from_borrowed(i)
     }
 }
-
-/*
-use crate::Butcher;
-
-#[derive(Butcher, Clone)]
-struct Foo {
-    #[butcher(rebutcher)]
-    bar: Bar,
-}
-#[derive(Butcher, Clone)]
-struct Bar(usize);
-*/
