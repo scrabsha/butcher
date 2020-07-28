@@ -127,7 +127,7 @@
 //!
 //! ## Copy
 //!
-//! This method will always copy the data (using the `Clone` trait), instead of
+//! This method will always copy the data (using the [`Clone`] trait), instead of
 //! returning a [`Cow`]. This can be used for type whose size is small, such as
 //! integers.
 //!
@@ -147,9 +147,9 @@
 //!
 //! ## Unbox
 //!
-//! An usage of `Box` on sized types is to create recursive types. This
+//! An usage of [`Box`] on sized types is to create recursive types. This
 //! butchering method will allow one to automatically get the data from the
-//! `Box`.
+//! [`Box`].
 //!
 //! See the documentation for [`Unbox`] for more information.
 //!
@@ -159,10 +159,10 @@
 //! try, it may become tricky when generics are involved. The next section will
 //! show how to fix most errors.
 //!
-//! Most of the errors raised when using the macro are trait-bound related. For
+//! Most of the errors raised when using the macro are trait bound-related. For
 //! instance, the following example does not compile:
 //!
-//! ```no_compile
+//! ```compile_fail
 //! use butcher::Butcher;
 //!
 //! #[derive(Butcher, Clone)]
@@ -184,7 +184,7 @@
 //!   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 //! ```
 //!
-//! So here it is necessary to indicate that `T` must be `Clone`. It can be
+//! So here it is necessary to indicate that `T` must be [`Clone`]. It can be
 //! specified right after the butchering method:
 //!
 //! ```rust
@@ -197,7 +197,14 @@
 //! }
 //! ```
 //!
+//! If multiple trait bounds must be specified, then they have to be separated
+//! by commas, using regular trait bounds syntax (eg: with the syntax of
+//! [`WhereClauseItem`] defined in the reference).
+//!
 //! [`Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
+//! [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+//! [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
+//! [`WhereClauseItem`]: https://doc.rust-lang.org/reference/items/generics.html#where-clauses
 //! [`Regular`]: ../methods/struct.Regular.html
 //! [`Copy`]: ../methods/struct.Copy.html
 //! [`Flatten`]: ../methods/struct.Flatten.html

@@ -1,4 +1,19 @@
 //! Different ways to butcher a field.
+//!
+//! This module defines the behaviour of each butchering method, and how they
+//! interact with the butcher derive macro.
+//!
+//! This module contains multiple butchering methods, represented by structs.
+//! These butchering methods implement the [`ButcheringMethod`] trait.
+//! This trait gives a definition of how the output data must be generated
+//! based on the input (what output type, what to do when input is borrowed and
+//! what to do when input is owned).
+//!
+//! The [`ButcherField`] trait is implemented for every structure associated to
+//! a field of struct or enum on which `Butcher` is derived.
+//!
+//! [`ButcheringMethod`]: trait.ButcheringMethod.html
+//! [`ButcherField`]: trait.ButcherField.html
 
 use std::borrow::{Borrow, Cow};
 use std::ops::Deref;
@@ -25,7 +40,9 @@ where
 /// The regular method.
 ///
 /// This method will transform a type `T` into a `Cow<T>`. It requires that `T`
-/// is `Clone`, but won't clone it.
+/// is [`Clone`], but won't clone it.
+///
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 pub struct Regular;
 
 impl<'cow, T> ButcheringMethod<'cow, T> for Regular
@@ -47,13 +64,16 @@ where
 
 /// The flatten method.
 ///
-/// This method will transform a type `T` which implements `Deref` into a
+/// This method will transform a type `T` which implements [`Deref`] into a
 /// `Cow<<T as Deref>::Target>`. This allows users not to have to deal with
-/// for instance `Cow<String>`, and instead automatically using `Cow<str>`.
+/// for instance `Cow<String>`, and instead automatically use `Cow<str>`.
 ///
-/// It requires `T` to implement `Deref` and `Borrow<<T as Deref>::Target>`,
-/// `<T as Deref>::Target` to implement `ToOwned`, and there must be
+/// It requires `T` to implement [`Deref`] and `Borrow<<T as Deref>::Target>`,
+/// `<T as Deref>::Target` to implement [`ToOwned`], and there must be
 /// `<<T as Deref>::Target as ToOwned>::Owned = T`.
+///
+/// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
+/// [`ToOwned`]: https://doc.rust-lang.org/nightly/alloc/borrow/trait.ToOwned.html
 pub struct Flatten;
 
 impl<'cow, T> ButcheringMethod<'cow, T> for Flatten
@@ -77,8 +97,13 @@ where
 
 /// The unbox method.
 ///
-/// This method allows to get rid of `Box` which where used in the fields in
-/// order to create recursive types. Most of the time, `T` is a `Box<U>`.
+/// This method allows to get rid of [`Box`] which is often used in order to
+/// create recursive types.
+///
+/// It requires `T` to implement [`Clone`].
+///
+/// [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 pub struct Unbox;
 
 impl<'cow, T> ButcheringMethod<'cow, Box<T>> for Unbox
@@ -104,8 +129,11 @@ where
 /// **Note**: this is not related to the `Copy` trait, but it effectively copies
 /// some data.
 ///
-/// This method does not output any `Cow` at all. Instead, it always copies the
-/// data provided as input, using the `Clone` trait.
+/// This method does not output any [`Cow`] at all. Instead, it moves or copies
+/// the data provided as input, using the [`Clone`] trait.
+///
+/// [`Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 pub struct Copy;
 
 impl<'cow, T> ButcheringMethod<'cow, T> for Copy
@@ -127,7 +155,8 @@ where
     }
 }
 
-/// Allow to butcher a specific field of a `struct` or `enum`.
+/// Define the behaviour of a specific field of a struct or enum when it is
+/// butchered.
 ///
 /// Implementors just have to specify a correct butchering method. The rest is
 /// automatically implemented.
