@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         rust:
+          - 1.42.0
           - stable
     steps:
       - uses: actions/checkout@v1
@@ -23,6 +24,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --tests
 
   test-features:
     name: Test Suite
@@ -30,6 +32,7 @@ jobs:
     strategy:
       matrix:
         rust:
+          - 1.42.0
           - stable
     steps:
       - uses: actions/checkout@v1
@@ -67,7 +70,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
