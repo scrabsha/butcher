@@ -66,10 +66,10 @@
 
 pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
-pub mod unnest;
+pub mod flatten;
 pub mod iterator;
 pub mod methods;
-pub mod flatten;
+pub mod unnest;
 
 pub use butcher_proc_macro::*;
 
