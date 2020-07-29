@@ -61,4 +61,23 @@ mod flatten_fn {
         assert!(matches!(output, Cow::Borrowed(_)));
         assert_eq!(output, "bar");
     }
+
+    #[test]
+    fn flatten_cow_box_str_owned() {
+        let input: Cow<Box<str>> = Cow::Owned(Box::from("foo"));
+        let output: Cow<str> = flatten_cow(input);
+
+        assert!(matches!(output, Cow::Owned(_)));
+        assert_eq!(output, "foo");
+    }
+
+    #[test]
+    fn flatten_cow_box_str_borrowed() {
+        let tmp = Box::from("bar");
+        let input: Cow<Box<str>> = Cow::Borrowed(&tmp);
+        let output: Cow<str> = flatten_cow(input);
+
+        assert!(matches!(output, Cow::Borrowed(_)));
+        assert_eq!(output, "bar");
+    }
 }
