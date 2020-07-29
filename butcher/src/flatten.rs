@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 
 // TODO: add doc
-fn flatten_cow<'cow, T>(input: Cow<'cow, T>) -> Cow<'cow, <T as Deref>::Target>
+fn flatten_cow<T>(input: Cow<T>) -> Cow<<T as Deref>::Target>
 where
     T: Deref + ToOwned,
     <T as Deref>::Target: ToOwned,
