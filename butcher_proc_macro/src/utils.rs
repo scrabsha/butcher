@@ -6,16 +6,6 @@ use quote::{format_ident, quote, IdentFragment, ToTokens, TokenStreamExt};
 
 use proc_macro2::{Literal, TokenStream};
 
-#[cfg(test)]
-macro_rules! assert_eq_tt {
-    ($left: ident, $right: ident) => {
-        let left = format!("{}", $left);
-        let right = format!("{}", $right);
-
-        assert_eq!(left, right);
-    };
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum FieldName {
     Named(Ident),
