@@ -69,6 +69,7 @@ pub mod deriving_butcher_struct;
 pub mod unnest;
 pub mod iterator;
 pub mod methods;
+pub mod flatten;
 
 pub use butcher_proc_macro::*;
 
