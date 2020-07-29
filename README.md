@@ -102,9 +102,8 @@ fn print_numbers(elems: Cow<[u32]>) {
 
 ### Minimum Supported Rust Version
 
-This crate requires at least Rust 1.45. This is needed because the
-`butcher_struct` proc\_macro expands to an expression, which is implemented
-in this Rust version.
+This crate currently compiles on rust version 1.45. It may be compatible with
+older versions of rust, but this is currently not guaranteed
 
 #### License
 
