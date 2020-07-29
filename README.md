@@ -102,8 +102,9 @@ fn print_numbers(elems: Cow<[u32]>) {
 
 ### Minimum Supported Rust Version
 
-This crate currently compiles on rust version 1.45. It may be compatible with
-older versions of rust, but this is currently not guaranteed
+This crate compiles in rust 1.42 and older. Upgrading MSRV is a breaking change.
+CI is set up so that it guarantees that the crate compiles and tests pass on
+both 1.42 and stable rust.
 
 #### License
 
