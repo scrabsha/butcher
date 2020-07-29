@@ -1,93 +1,124 @@
-//! A trait that allows to flatten `Cow<Cow<T>>` to `Cow<T>`.
+//! Allows to flatten some data wrapped in a `Cow`.
+//!
+//! For instance, this allows to convert a `Cow<String>` to a `Cow<str>`, which
+//! is easier to deal with.
 
 use std::borrow::Cow;
 use std::ops::Deref;
 
-fn flatten_cow<'a, 'b, T>(this: Cow<'a, Cow<'b, T>>) -> Cow<'a, T>
+fn flatten_cow<T>(input: Cow<T>) -> Cow<<T as Deref>::Target>
 where
-    'b: 'a,
-    T: ToOwned + 'b,
+    T: Deref + ToOwned,
+    <T as Deref>::Target: ToOwned,
+    <<T as Deref>::Target as ToOwned>::Owned: From<<T as ToOwned>::Owned>,
 {
-    match this {
-        Cow::Owned(this) => this,
-        Cow::Borrowed(this) => Cow::Borrowed(this.deref()),
+    match input {
+        Cow::Borrowed(input) => Cow::Borrowed(input.deref()),
+        Cow::Owned(input) => Cow::Owned(input.into()),
     }
 }
 
-/// Allows to flatten a `Cow`.
+/// Allows to flatten some data wrapped in a `Cow`.
 ///
-/// This trait is automatically implemented for each `Cow<Cow<T>>`, and provide
-/// the `flatten` method. This method allows to deal easily with return type
-/// created by `#[derive(Butcher)]` when it is called on objects with `Cow` in
-/// one of their fields.
+/// The best use case for this is to transform a `Cow<String>` into a
+/// `Cow<str>`. This also works for the boxed unsized type, as long as they
+/// implement the traits as required below.
 ///
-/// See for example the following struct:
+/// # Example
+///
+/// The following example shows the flattening of `Cow<String>` and
+/// `Cow<PathBuf>`:
 ///
 /// ```rust
-/// use butcher::Butcher;
-/// use std::borrow::Cow;
+/// use std::{
+///     borrow::Cow,
+///     path::{Path, PathBuf},
+/// };
 ///
-/// #[derive(Butcher, Clone)]
-/// struct Foo<'a> {
-///     bar: Cow<'a, str>,
-/// }
+/// use butcher::flatten::FlattenCow;
+///
+/// // The type is annotated so that it is easier to understand what's happening
+/// let a: Cow<String> = Cow::Owned(String::from("Grace Hopper"));
+/// let a_flattened: Cow<str> = a.flatten();
+/// assert_eq!(a_flattened, "Grace Hopper");
+///
+/// let b: Cow<PathBuf> = Cow::Owned(PathBuf::from("/path/to/foo"));
+/// let b_flattened: Cow<Path> = b.flatten();
+/// assert_eq!(b_flattened, Path::new("/path/to/foo"));
 /// ```
 ///
-/// Here, the fields `bar` of `ButcheredFoo` would have type
-/// `Cow<'cow<Cow<'a str>>`. This trait allows us to easily get back a
-/// `Cow<'cow str>`.
-pub trait FlattenCow<'a, T: ToOwned + 'a> {
-    fn flatten(self) -> Cow<'a, T>;
+/// # Traits requirements
+///
+/// In order to call `flatten` on a `Cow<T>`, the following requirements must be
+/// satisified:
+///   - `T` must implement [`ToOwned`], which is required to build the initial
+///   `Cow<T>`,
+///   - `T` must implement [`Deref`], and its `Target` must also implement
+///   [`ToOwned`], which is required to build the output
+///   `Cow<<T as Deref>::Target>`, and when the borrowed case is met,
+///   - `T` must be convertible into the `Owned` type associated to the `Target`
+///   dereferenced type, which is required when the owned case is met.
+///
+/// [`ToOwned`]: https://doc.rust-lang.org/std/borrow/trait.ToOwned.html
+/// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
+pub trait FlattenCow<'cow, T>
+where
+    T: Deref,
+    <T as Deref>::Target: ToOwned,
+{
+    fn flatten(self) -> Cow<'cow, <T as Deref>::Target>;
 }
 
-impl<'a, 'b: 'a, T: ToOwned + 'a> FlattenCow<'a, T> for Cow<'b, Cow<'a, T>> {
-    /// Flattens the `Cow`.
-    fn flatten(self) -> Cow<'a, T> {
+impl<'cow, T> FlattenCow<'cow, T> for Cow<'cow, T>
+where
+    T: Deref + ToOwned,
+    <T as Deref>::Target: ToOwned,
+    <<T as Deref>::Target as ToOwned>::Owned: From<<T as ToOwned>::Owned>,
+{
+    fn flatten(self) -> Cow<'cow, <T as Deref>::Target> {
         flatten_cow(self)
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod flatten_fn {
     use super::*;
 
-    fn is_owned<T: ToOwned>(input: Cow<T>) -> bool {
-        matches!(input, Cow::Owned(_))
+    #[test]
+    fn flatten_cow_string_owned() {
+        let input: Cow<String> = Cow::Owned(String::from("foo"));
+        let output: Cow<str> = flatten_cow(input);
+
+        assert!(matches!(output, Cow::Owned(_)));
+        assert_eq!(output, "foo");
     }
 
     #[test]
-    fn owned_owned() {
-        let input: Cow<Cow<usize>> = Cow::Owned(Cow::Owned(42));
-        let tmp = input.flatten();
+    fn flatten_cow_string_borrowed() {
+        let tmp = String::from("bar");
+        let input: Cow<String> = Cow::Borrowed(&tmp);
+        let output: Cow<str> = flatten_cow(input);
 
-        assert_eq!(tmp, Cow::Owned(42));
-        assert!(is_owned(tmp));
+        assert!(matches!(output, Cow::Borrowed(_)));
+        assert_eq!(output, "bar");
     }
 
     #[test]
-    fn owned_borrowed() {
-        let input: Cow<Cow<usize>> = Cow::Owned(Cow::Borrowed(&42));
-        let tmp = input.flatten();
+    fn flatten_cow_box_str_owned() {
+        let input: Cow<Box<str>> = Cow::Owned(Box::from("foo"));
+        let output: Cow<str> = flatten_cow(input);
 
-        assert_eq!(tmp, Cow::Owned(42));
-        assert!(!is_owned(tmp));
+        assert!(matches!(output, Cow::Owned(_)));
+        assert_eq!(output, "foo");
     }
 
     #[test]
-    fn borrowed_owned() {
-        let input: Cow<Cow<usize>> = Cow::Borrowed(&Cow::Owned(42));
-        let tmp = input.flatten();
+    fn flatten_cow_box_str_borrowed() {
+        let tmp = Box::from("bar");
+        let input: Cow<Box<str>> = Cow::Borrowed(&tmp);
+        let output: Cow<str> = flatten_cow(input);
 
-        assert_eq!(tmp, Cow::Owned(42));
-        assert!(!is_owned(tmp));
-    }
-
-    #[test]
-    fn borrowed_borrowed() {
-        let input: Cow<Cow<usize>> = Cow::Borrowed(&Cow::Borrowed(&42));
-        let tmp = input.flatten();
-
-        assert_eq!(tmp, Cow::Owned(42));
-        assert!(!is_owned(tmp));
+        assert!(matches!(output, Cow::Borrowed(_)));
+        assert_eq!(output, "bar");
     }
 }
