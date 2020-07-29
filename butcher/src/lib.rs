@@ -56,11 +56,19 @@
 //!
 //! [`CowIter`]: iterator/enum.CowIter.html
 //!
-//! ## Flattening
+//! ## Unnesting
 //!
 //! In some situations, the `Butcher` proc macro can generate tricky fields,
-//! such as nested `Cow`. The [`FlattenCow`] trait aims to remove such
-//! flattening. See [its documentation for more][`FlattenCow`].
+//! such as nested `Cow`. The [`UnnestCow`] trait aims to remove such
+//! flattening.
+//!
+//! [`UnnestCow`]: unnest/trait.UnnestCow.html
+//!
+//! ## Flattening
+//!
+//! The [`FlattenCow`] trait allows to transform a given `Cow<T>` into a
+//! `Cow<<T as Deref>::Target>`. This can be usefull when it is needed to
+//! transform a `Cow<String>` into `Cow<str>`.
 //!
 //! [`FlattenCow`]: flatten/trait.FlattenCow.html
 
