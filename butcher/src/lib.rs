@@ -87,4 +87,6 @@ pub trait Butcher<'cow>: ToOwned + 'cow {
     type Output: 'cow;
 
     fn butcher(this: Cow<'cow, Self>) -> Self::Output;
+
+    fn unbutcher(this: Self::Output) -> Self;
 }
