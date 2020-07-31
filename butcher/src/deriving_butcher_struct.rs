@@ -161,6 +161,45 @@
 //!
 //! See the documentation for [`Rebutcher`] for more information.
 //!
+//! ## Retrieving the initial input type
+//!
+//! The `unbutcher` allows to retrieve the initial data, in its owned form.
+//! It will move the associated butchered struct, and return the initial struct.
+//! Every borrowed data will be cloned if necessary.
+//!
+//! This is particularly usefull when a catch-all match arm is needed.
+//!
+//! ```rust
+//! # #[derive(Butcher, Clone)]
+//! # struct Client {
+//! #     #[butcher(flatten)]
+//! #     name: String,
+//! #     #[butcher(copy)]
+//! #     age: u8,
+//! # }
+//! use butcher::Butcher;
+//! use std::borrow::Cow;
+//!
+//! let c_in_cow: Cow<Client> = Cow::Owned(Client {
+//!     name: "Alan Turing".to_string(),
+//!     age: 41,
+//! });
+//!
+//! match Client::butcher(c_in_cow) {
+//!     ButcheredClient { name, age } if name.as_ref() == "Abdul Alhazred" => {
+//!         println!("Necronomicon author detected!")
+//!     },
+//!     ButcheredClient { name, age } if age == 255 => {
+//!         println!("This person will soon reborn")
+//!     },
+//!     other => {
+//!         // other has type ButcheredClient. Let's convert it to Client:
+//!         let other = Client::unbutcher(other);
+//!         println!("Hello {}", other.name);
+//!     },
+//! }
+//! ```
+//!
 //! ## Fixing triggered compilation errors
 //!
 //! While this proc macro generally generates code that compile on the first

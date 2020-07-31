@@ -37,12 +37,18 @@ where
 
     /// Creates an output with a borrowed input.
     fn from_borrowed(i: &'cow T) -> Self::Output;
+
+    /// Creates back the initial input data.
+    ///
+    /// This function will clone `i` if it contains borrowed data.
+    fn unbutcher(i: Self::Output) -> T;
 }
 
-/// The regular method.
+/// The regular method, used by default.
 ///
 /// This method will transform a type `T` into a `Cow<T>`. It requires that `T`
-/// is [`Clone`], but won't clone it.
+/// is [`Clone`], but will call it only if `unbutcher` is called on borrowed
+/// variant.
 ///
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 pub struct Regular;
@@ -62,6 +68,16 @@ where
     fn from_borrowed(i: &'cow T) -> Self::Output {
         Cow::Borrowed(i)
     }
+
+    /// Recreates the original data.
+    ///
+    /// This will move the data if it owned, otherwise it will clone it.
+    fn unbutcher(i: Self::Output) -> T {
+        match i {
+            Cow::Borrowed(b) => b.clone(),
+            Cow::Owned(o) => o,
+        }
+    }
 }
 
 /// The flatten method.
@@ -70,9 +86,7 @@ where
 /// `Cow<<T as Deref>::Target>`. This allows users not to have to deal with
 /// for instance `Cow<String>`, and instead automatically use `Cow<str>`.
 ///
-/// It requires `T` to implement [`Deref`] and `Borrow<<T as Deref>::Target>`,
-/// `<T as Deref>::Target` to implement [`ToOwned`], and there must be
-/// `<<T as Deref>::Target as ToOwned>::Owned = T`.
+/// See the trait bounds for a complete list of requirements.
 ///
 /// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
 /// [`ToOwned`]: https://doc.rust-lang.org/nightly/alloc/borrow/trait.ToOwned.html
@@ -83,6 +97,7 @@ where
     T: Deref + Borrow<<T as Deref>::Target> + 'cow,
     <T as Deref>::Target: ToOwned + 'cow,
     T: Into<<<T as Deref>::Target as ToOwned>::Owned>,
+    T: From<<<T as Deref>::Target as ToOwned>::Owned>,
 {
     type Output = Cow<'cow, <T as Deref>::Target>;
 
@@ -94,6 +109,13 @@ where
     /// Create a `Borrowed` variant, containing a reference to `T`.
     fn from_borrowed(i: &'cow T) -> Self::Output {
         Cow::Borrowed(i)
+    }
+
+    fn unbutcher(i: Self::Output) -> T {
+        match i {
+            Cow::Owned(o) => T::from(o),
+            Cow::Borrowed(b) => b.to_owned().into(),
+        }
     }
 }
 
@@ -123,6 +145,13 @@ where
     /// Create a `Borrowed` variant, using the `Deref` trait.
     fn from_borrowed(i: &'cow Box<T>) -> Self::Output {
         Cow::Borrowed(Deref::deref(i))
+    }
+
+    fn unbutcher(i: Self::Output) -> Box<T> {
+        match i {
+            Cow::Owned(o) => Box::new(o),
+            Cow::Borrowed(b) => Box::new(b.clone()),
+        }
     }
 }
 
@@ -154,6 +183,10 @@ where
     /// `Clone` the input data.
     fn from_borrowed(i: &'cow T) -> Self::Output {
         i.clone()
+    }
+
+    fn unbutcher(i: Self::Output) -> T {
+        i
     }
 }
 
@@ -195,7 +228,7 @@ pub struct Rebutcher;
 
 impl<'cow, T> ButcheringMethod<'cow, T> for Rebutcher
 where
-    T: Butcher<'cow> + ToOwned<Owned = T> + 'cow,
+    T: Butcher<'cow> + Clone + ToOwned<Owned = T> + 'cow,
 {
     type Output = <T as Butcher<'cow>>::Output;
 
@@ -206,6 +239,10 @@ where
     fn from_borrowed(i: &'cow T) -> Self::Output {
         <T as Butcher>::butcher(Cow::Borrowed(i))
     }
+
+    fn unbutcher(i: Self::Output) -> T {
+        Butcher::unbutcher(i)
+    }
 }
 
 /// Define the behaviour of a specific field of a struct or enum when it is
@@ -215,7 +252,7 @@ where
 /// automatically implemented.
 pub trait ButcherField<'cow, T>
 where
-    T: 'cow,
+    T: 'cow + Clone,
 {
     /// The method which will be used.
     type Method: ButcheringMethod<'cow, T>;
@@ -226,5 +263,9 @@ where
 
     fn from_borrowed(i: &'cow T) -> <Self::Method as ButcheringMethod<'cow, T>>::Output {
         <Self::Method as ButcheringMethod<'cow, T>>::from_borrowed(i)
+    }
+
+    fn unbutcher(i: <Self::Method as ButcheringMethod<'cow, T>>::Output) -> T {
+        <Self::Method as ButcheringMethod<'cow, T>>::unbutcher(i)
     }
 }

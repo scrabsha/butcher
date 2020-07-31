@@ -53,3 +53,35 @@
 //!     Bar(T),
 //! }
 //! ```
+//!
+//! Unbutchering can be used to create simple catch-all match arm:
+//!
+//! ```rust
+//! # fn handle_special_event(_: LogEvent) {}
+//! use butcher::Butcher;
+//! use std::borrow::Cow;
+//!
+//! #[derive(Debug, Clone, Butcher)]
+//! enum LogEvent {
+//!     Info,
+//!     Dbg(&'static str),
+//!     Warning(
+//!         #[butcher(flatten)]
+//!         String,
+//!     ),
+//! }
+//!
+//! let event: Cow<LogEvent> = Cow::Owned(LogEvent::Dbg("Heyo"));
+//!
+//! match LogEvent::butcher(event) {
+//!     ButcheredLogEvent::Info => {},
+//!     ButcheredLogEvent::Warning(w) => println!("Warning emitted: {}", w),
+//!     // A catch-all match arm
+//!     other => {
+//!         // We get back the original data
+//!         let e = LogEvent::unbutcher(other);
+//!
+//!         handle_special_event(e);
+//!     }
+//! }
+//! ```
