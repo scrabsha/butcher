@@ -190,6 +190,10 @@ impl ButcheredStruct {
         let borrowed_arm = self.borrowed_match_arm(lt);
         let owned_arm = self.owned_match_arm(lt);
 
+        let destructured = self.destructure_butchered_struct();
+        let own_each_field = self.own_each_field(lt);
+        let initial_struct = self.recreate_initial_struct();
+
         quote! {
             impl< #( #generics_declaration ),* >
                 butcher::Butcher<#lt> for
@@ -203,6 +207,12 @@ impl ButcheredStruct {
                         #borrowed_arm,
                         #owned_arm,
                     }
+                }
+
+                fn unbutcher(this: Self::Output) -> Self {
+                    let #destructured = this;
+                    #own_each_field;
+                    #initial_struct
                 }
             }
         }
@@ -340,6 +350,75 @@ impl ButcheredStruct {
             },
             StructKind::Tupled => quote! {
                 #name ( #( #fields ),* )
+            },
+        }
+    }
+
+    fn destructure_butchered_struct(&self) -> TokenStream {
+        let type_name = utils::global_associated_struct_name(&self.name);
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        let destructure_expression = match self.kind {
+            StructKind::Named => quote! {
+                {
+                    #( #fields ),*
+                }
+            },
+            StructKind::Tupled => quote! {
+                (
+                    #( #fields ),*
+                )
+            },
+        };
+
+        quote! {
+            #type_name #destructure_expression
+        }
+    }
+
+    fn own_each_field(&self, lt: &TokenStream) -> TokenStream {
+        let names = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        let names2 = names.clone();
+
+        let associated_structs = self
+            .fields
+            .iter()
+            // .map(|f| utils::associated_struct_name(&self.name, &f.name));
+            .map(|f| f.associated_struct_with_generics(&self.name));
+
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
+        quote! {
+            let ( #( #names ),* ) =
+                ( #(
+                    < #associated_structs as butcher::methods::ButcherField< #lt, #associated_struct_types >>::unbutcher( #names2 )
+                ),* );
+        }
+    }
+
+    fn recreate_initial_struct(&self) -> TokenStream {
+        let type_name = &self.name;
+
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        match self.kind {
+            StructKind::Named => quote! {
+                #type_name {
+                    #( #fields ),*
+                }
+            },
+            StructKind::Tupled => quote! {
+                #type_name( #( #fields ),* )
             },
         }
     }

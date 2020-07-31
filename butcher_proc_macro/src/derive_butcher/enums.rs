@@ -176,6 +176,11 @@ impl ButcheredEnum {
             .provided_where_clause_items()
             .chain(self.required_where_clause_items(lt));
 
+        let unbutcher_match_arms = self
+            .variants
+            .iter()
+            .map(|v| v.unbutcher_match_arm(&self.name, lt));
+
         quote! {
             impl #generic_declaration
                 butcher::Butcher< #lt >
@@ -193,6 +198,12 @@ impl ButcheredEnum {
                         std::borrow::Cow::Borrowed(this) => match this {
                             #( #borrowed_arms, )*
                         },
+                    }
+                }
+
+                fn unbutcher(this: Self::Output) -> Self {
+                    match this {
+                        #( #unbutcher_match_arms ),*
                     }
                 }
             }
@@ -405,6 +416,87 @@ impl Variant {
                         < #associated_struct as butcher::methods::ButcherField<#lt, #associated_struct_types>>:: #method ( #fields )
                     ),*
                 )
+            },
+        }
+    }
+
+    fn unbutcher_match_arm(&self, enum_name: &Ident, lt: &TokenStream) -> TokenStream {
+        let butchered_enum_name = utils::global_associated_struct_name(enum_name);
+        let pattern = self.unbutcher_match_arm_pattern(&butchered_enum_name);
+        let own_each_field = self.own_each_field(enum_name, lt);
+        let initial_struct = self.recreate_initial_struct(enum_name);
+
+        quote! {
+            #pattern => {
+                #own_each_field;
+                #initial_struct
+            }
+        }
+    }
+
+    fn unbutcher_match_arm_pattern(&self, butchered_enum_name: &Ident) -> TokenStream {
+        let variant_name = &self.name;
+        let fields = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        let bindings = match self.kind {
+            VariantKind::Named => quote! {
+                { #( #fields ),* }
+            },
+            VariantKind::Unnamed => quote! {
+                ( #( #fields ),* )
+            },
+            VariantKind::Unit => quote! {},
+        };
+
+        quote! {
+            #butchered_enum_name :: #variant_name #bindings
+        }
+    }
+
+    fn own_each_field(&self, enum_name: &Ident, lt: &TokenStream) -> TokenStream {
+        let names = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+        let names2 = names.clone();
+
+        let name = format_ident!("{}{}", enum_name, &self.name);
+
+        let associated_structs = self
+            .fields
+            .iter()
+            .map(|f| f.associated_struct_with_generics(&name));
+
+        let associated_struct_types = self.fields.iter().map(|f| &f.ty);
+
+        quote! {
+            let ( #( #names ),* ) =
+                ( #(
+                    < #associated_structs as butcher::methods::ButcherField< #lt, #associated_struct_types >>::unbutcher( #names2 )
+                ),* )
+        }
+    }
+
+    fn recreate_initial_struct(&self, enum_name: &Ident) -> TokenStream {
+        let variant_name = &self.name;
+
+        let names = self
+            .fields
+            .iter()
+            .map(|f| f.name.expand_as_pattern_identifier());
+
+        match self.kind {
+            VariantKind::Named => quote! {
+                #enum_name :: #variant_name { #( #names ),* }
+            },
+            VariantKind::Unnamed => quote! {
+                #enum_name :: #variant_name ( #( #names ),* )
+            },
+            VariantKind::Unit => quote! {
+                #enum_name :: #variant_name
             },
         }
     }
