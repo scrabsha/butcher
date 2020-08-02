@@ -6,7 +6,7 @@ use std::ops::Deref;
 fn unnest_cow<'a, 'b, T>(this: Cow<'a, Cow<'b, T>>) -> Cow<'a, T>
 where
     'b: 'a,
-    T: ToOwned + 'b,
+    T: ToOwned + ?Sized + 'b,
 {
     match this {
         Cow::Owned(this) => this,
@@ -35,12 +35,37 @@ where
 ///
 /// Here, the fields `bar` of `ButcheredFoo` would have type
 /// `Cow<'cow<Cow<'a str>>`. This trait allows us to easily get back a
-/// `Cow<'cow str>`.
-pub trait UnnestCow<'a, T: ToOwned + 'a> {
+/// `Cow<'cow str>`:
+///
+/// ```rust
+/// # use butcher::Butcher;
+/// # use std::borrow::Cow;
+/// #
+/// # #[derive(Butcher, Clone)]
+/// # struct Foo<'a> {
+/// #     bar: Cow<'a, str>,
+/// # }
+/// #
+/// use butcher::unnest::UnnestCow;
+///
+/// let input_foo = Cow::Owned(Foo {
+///     bar: Cow::Borrowed("hello, world!"),
+/// });
+///
+/// // Here, bar has type Cow<'cow, Cow<'a, str>>
+/// let ButcheredFoo { bar } = Foo::butcher(input_foo);
+///
+/// // The following piece of code transforms it into Cow<'cow, str>
+/// let bar = bar.unnest();
+/// ```
+///
+/// The outputed `Cow` will be and `Owned` variant only if the input `Cow` is
+/// `Owned` on its two levels (eg: it matches `Cow::Owned(Cow::Owned(_))`).
+pub trait UnnestCow<'a, T: ToOwned + ?Sized + 'a> {
     fn unnest(self) -> Cow<'a, T>;
 }
 
-impl<'a, 'b: 'a, T: ToOwned + 'a> UnnestCow<'a, T> for Cow<'b, Cow<'a, T>> {
+impl<'a, 'b: 'a, T: ToOwned + ?Sized + 'a> UnnestCow<'a, T> for Cow<'b, Cow<'a, T>> {
     /// Flattens the `Cow`.
     fn unnest(self) -> Cow<'a, T> {
         unnest_cow(self)

@@ -2,11 +2,13 @@
 //!
 //! An easy way to interact with `Cow`ed structs and enums.
 //!
-//! This crate proposes some simple solutions to the most common patterns I met
-//! while working with `Cow`s in Rust. It currently fixes two patterns:
-//! destructuring and iteration related to objects wrapped in `Cow`.
+//! This crate provides the following functionalities for data wrapped in `Cow`:
+//!   - [destructuring/pattern matching over structs and enums](#destructuringpattern-matching),
+//!   - [iterating over collections, or any type that implements `IntoIterator`](#iteration),
+//!   - [unnesting `Cow`](#unnesting),
+//!   - [flattening `Cow`](#flattening).
 //!
-//! ## Destructuring
+//! ## Destructuring/pattern matching
 //!
 //! The `Butcher` trait can be used when it is necessary to destruture something
 //! wrapped in a `Cow`. Below is a simple example:
@@ -25,6 +27,31 @@
 //!     let ButcheredMyNumberList { val, next } = Butcher::butcher(i);
 //!
 //!     (val, next)
+//! }
+//! ```
+//!
+//! This also allows pattern matching, as demonstrated in the following example:
+//!
+//! ```rust
+//! use butcher::Butcher;
+//! use std::borrow::Cow;
+//!
+//! #[derive(Butcher, Clone)]
+//! enum WebEvent {
+//!     PageLoad,
+//!     KeyPress(char),
+//!     Paste(String),
+//!     // or c-like structures.
+//!     Click { x: i64, y: i64 },
+//! }
+//!
+//! fn print_action(i: Cow<WebEvent>) {
+//!     match WebEvent::butcher(i) {
+//!         ButcheredWebEvent::PageLoad => { /* ... */ },
+//!         ButcheredWebEvent::KeyPress(key) => { /* ... */ },
+//!         ButcheredWebEvent::Paste(pasted) => { /* ... */ },
+//!         ButcheredWebEvent::Click { x, y } => { /* ... */ },
+//!     }
 //! }
 //! ```
 //!
