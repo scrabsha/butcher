@@ -11,12 +11,7 @@
 [docs-badge]: https://img.shields.io/badge/docs-latest-blue.svg
 [docs-url]: https://docs.rs/butcher
 
-An easy way to interact with `Cow`ed structs and enums.
-
-## Disclaimer
-
-This crate is still in early steps of developpments. It should not be used in
-production.
+An easy way to interact with structs and enums wrapped in [`Cow`][cow].
 
 ## Concept
 
@@ -26,12 +21,17 @@ this can lead to a lot of code duplication in some situations.
 
 [cow]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
 
-This crate aims to allow allow simple destructuring, pattern matching and
-iteration over data wrapped in `Cow`.
+This crate currently provide the following functionalities:
+  - destucturing any struct wrapped in `Cow`,
+  - pattern matching on structs and enum in `Cow`,
+  - iteration over collections wrapped in `Cow`,
+  - `Cow` flattening,
+  - `Cow` unnesting.
 
 ### Destructuring
 
-The `Butcher` trait can be derived on structs. Destructuring is then made easy:
+The `Butcher` trait can be derived on structs and enums. Destructuring is then
+made easy:
 
 ```rust
 use std::borrow::Cow;
@@ -98,6 +98,38 @@ fn print_numbers(elems: Cow<[u32]>) {
         println!("{:?}", element);
     }
 }
+```
+
+### Flatening
+
+Thanks to the [`Deref`] trait, it is possible to `flatten` a `Cow<T>` to
+`Cow<<T as Deref>::Target>`. For instance, it is possible to create a `Cow<str>`
+from a `Cow<String>`, a `Cow<[T]>` from a `Cow<Vec<T>>`, and so on.
+
+Thanks to how [`Deref`] is defined, the target type is always infered by the
+type inference system, which is *very* convenient.
+
+```rust
+use std::borrow::Cow;
+use butcher::flatten::FlattenCow;
+
+let some_cow: Cow<String> = Cow::Owned(String::from("Hello 🦀"));
+let flattened_cow: Cow<str> = some_cow.flatten();
+```
+
+[`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
+
+### Unnesting
+
+The `Unnest` trait allows to simply remove nested usage of cow. It provides the
+`unnest` method, which transforms a `Cow<Cow<T>>` into `Cow<T>`.
+
+```rust
+use std::borrow::Cow;
+use butcher::unnest::UnnestCow;
+
+let foo: Cow<Cow<usize>> = Cow::Owned(Cow::Owned(42usize));
+let foo_unnested: Cow<usize> = foo.unnest();
 ```
 
 ### Minimum Supported Rust Version
