@@ -10,7 +10,9 @@ mod derive_butcher;
 
 /// Derives the `Butcher` trait for a structure or an enum.
 ///
-/// Currently, enums are not supported.
+/// See the documentation included in [`butcher`] for more information.
+///
+/// [`butcher`]: https://docs.rs/butcher
 #[proc_macro_derive(Butcher, attributes(butcher))]
 pub fn butcher_derive(tokens: TokenStream) -> TokenStream {
     let data = parse_macro_input!(tokens as DeriveInput);
