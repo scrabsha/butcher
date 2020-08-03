@@ -400,7 +400,7 @@ fn extend_discovered<T>(
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(super) enum ButcheringMethod {
     Copy,
-    Flatten,
+    AsDeref,
     Rebutcher,
     Regular,
     Unbox,
@@ -410,7 +410,7 @@ impl ButcheringMethod {
     fn required_traits_for(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
         match self {
             ButcheringMethod::Copy => quote! { #ty: Clone },
-            ButcheringMethod::Flatten => {
+            ButcheringMethod::AsDeref => {
                 quote! { #ty: Into<<<#ty as std::ops::Deref>::Target as ToOwned>::Owned> }
             }
             ButcheringMethod::Rebutcher => {
@@ -427,7 +427,7 @@ impl ButcheringMethod {
     fn output_type_unwrapped(&self, ty: &Type, lt: &TokenStream) -> TokenStream {
         match self {
             ButcheringMethod::Copy => quote! { #ty },
-            ButcheringMethod::Flatten | ButcheringMethod::Unbox => {
+            ButcheringMethod::AsDeref | ButcheringMethod::Unbox => {
                 let cow = cow();
                 quote! { #cow < #lt , <#ty as std::ops::Deref>::Target > }
             }
@@ -444,7 +444,7 @@ impl ButcheringMethod {
     fn associated_method_name(self) -> TokenStream {
         match self {
             ButcheringMethod::Copy => quote! { butcher::methods::Copy },
-            ButcheringMethod::Flatten => quote! { butcher::methods::Flatten },
+            ButcheringMethod::AsDeref => quote! { butcher::methods::AsDeref },
             ButcheringMethod::Rebutcher => quote! { butcher::methods::Rebutcher },
             ButcheringMethod::Regular => quote! { butcher::methods::Regular },
             ButcheringMethod::Unbox => quote! { butcher::methods::Unbox },
@@ -458,8 +458,8 @@ impl Parse for ButcheringMethod {
 
         if i == "copy" {
             Ok(ButcheringMethod::Copy)
-        } else if i == "flatten" {
-            Ok(ButcheringMethod::Flatten)
+        } else if i == "as_deref" {
+            Ok(ButcheringMethod::AsDeref)
         } else if i == "rebutcher" {
             Ok(ButcheringMethod::Rebutcher)
         } else if i == "regular" {

@@ -111,7 +111,7 @@
 //!     a: Ipv4Addr,
 //!     #[butcher(copy)]
 //!     b: usize,
-//!     #[butcher(flatten)]
+//!     #[butcher(as_deref)]
 //!     c: String,
 //!     #[butcher(unbox)]
 //!     d: Box<Ipv4Addr>,
@@ -136,14 +136,14 @@
 //!
 //! See the documentation for [`Copy`] for more information.
 //!
-//! ## Flatten
+//! ## As Deref
 //!
 //! This method is used for situations when data can be represented both with
 //! its borrowed and its owned form. For instance, `[T]` is borrowed while
-//! `Vec<T>` is owned. Here, using `flatten` on a field whose type is `Vec<T>`
+//! `Vec<T>` is owned. Here, using `as_deref` on a field whose type is `Vec<T>`
 //! will convert it into `Cow<[T]>`.
 //!
-//! See the documentation for [`Flatten`] for more information.
+//! See the documentation for [`AsDeref`] for more information.
 //!
 //! ## Unbox
 //!
@@ -172,7 +172,7 @@
 //! ```rust
 //! # #[derive(Butcher, Clone)]
 //! # struct Client {
-//! #     #[butcher(flatten)]
+//! #     #[butcher(as_deref)]
 //! #     name: String,
 //! #     #[butcher(copy)]
 //! #     age: u8,
@@ -214,7 +214,7 @@
 //!
 //! #[derive(Butcher, Clone)]
 //! struct Foo<T> {
-//!     #[butcher(flatten)]
+//!     #[butcher(as_deref)]
 //!     elem: Vec<T>,
 //! }
 //! ```
@@ -239,7 +239,7 @@
 //!
 //! #[derive(Butcher, Clone)]
 //! struct Foo<T> {
-//!     #[butcher(flatten, T: Clone)]
+//!     #[butcher(as_deref, T: Clone)]
 //!     elem: Vec<T>,
 //! }
 //! ```
@@ -252,8 +252,8 @@
 //! [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 //! [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 //! [`WhereClauseItem`]: https://doc.rust-lang.org/reference/items/generics.html#where-clauses
+//! [`AsDeref`]: ../methods/struct.AsDeref.html
 //! [`Copy`]: ../methods/struct.Copy.html
-//! [`Flatten`]: ../methods/struct.Flatten.html
 //! [`Rebutcher`]: ../methods/struct.Rebutcher.html
 //! [`Regular`]: ../methods/struct.Regular.html
 //! [`Unbox`]: ../methods/struct.Unbox.html
