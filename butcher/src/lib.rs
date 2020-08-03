@@ -5,8 +5,8 @@
 //! This crate provides the following functionalities for data wrapped in `Cow`:
 //!   - [destructuring/pattern matching over structs and enums](#destructuringpattern-matching),
 //!   - [iterating over collections, or any type that implements `IntoIterator`](#iteration),
-//!   - [unnesting `Cow`](#unnesting),
-//!   - [flattening `Cow`](#flattening).
+//!   - [flattening `Cow`](#flattening),
+//!   - [removing an indirection level `Cow`](#removing-an-indirection-level).
 //!
 //! ## Destructuring/pattern matching
 //!
@@ -83,28 +83,28 @@
 //!
 //! [`CowIter`]: iterator/enum.CowIter.html
 //!
-//! ## Unnesting
-//!
-//! In some situations, the `Butcher` proc macro can generate tricky fields,
-//! such as nested `Cow`. The [`UnnestCow`] trait aims to remove such
-//! flattening.
-//!
-//! [`UnnestCow`]: unnest/trait.UnnestCow.html
-//!
 //! ## Flattening
 //!
-//! The [`FlattenCow`] trait allows to transform a given `Cow<T>` into a
+//! In some situations, the `Butcher` proc macro can generate tricky fields,
+//! such as nested `Cow`. The [`FlattenCow`] trait aims to remove such
+//! flattening.
+//!
+//! [`FlattenCow`]: flatten/trait.FlattenCow.html
+//!
+//! ## Removing an indirection level
+//!
+//! The [`AsDerefCow`] trait allows to transform a given `Cow<T>` into a
 //! `Cow<<T as Deref>::Target>`. This can be usefull when it is needed to
 //! transform a `Cow<String>` into `Cow<str>`.
 //!
-//! [`FlattenCow`]: flatten/trait.FlattenCow.html
+//! [`AsDerefCow`]: as_deref/trait.AsDerefCow.html
 
+pub mod as_deref;
 pub mod deriving_butcher_enum;
 pub mod deriving_butcher_struct;
 pub mod flatten;
 pub mod iterator;
 pub mod methods;
-pub mod unnest;
 
 pub use butcher_proc_macro::*;
 

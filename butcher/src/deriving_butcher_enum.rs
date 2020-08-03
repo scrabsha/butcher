@@ -36,7 +36,7 @@
 //!     },
 //!     Pound(f32),
 //!     Quoted(
-//!         #[butcher(flatten)]
+//!         #[butcher(as_deref)]
 //!         String,
 //!     ),
 //!     None,
@@ -66,7 +66,7 @@
 //!     Info,
 //!     Dbg(&'static str),
 //!     Warning(
-//!         #[butcher(flatten)]
+//!         #[butcher(as_deref)]
 //!         String,
 //!     ),
 //! }

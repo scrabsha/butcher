@@ -80,7 +80,7 @@ where
     }
 }
 
-/// The flatten method.
+/// The as deref method.
 ///
 /// This method will transform a type `T` which implements [`Deref`] into a
 /// `Cow<<T as Deref>::Target>`. This allows users not to have to deal with
@@ -90,9 +90,9 @@ where
 ///
 /// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
 /// [`ToOwned`]: https://doc.rust-lang.org/nightly/alloc/borrow/trait.ToOwned.html
-pub struct Flatten;
+pub struct AsDeref;
 
-impl<'cow, T> ButcheringMethod<'cow, T> for Flatten
+impl<'cow, T> ButcheringMethod<'cow, T> for AsDeref
 where
     T: Deref + Borrow<<T as Deref>::Target> + 'cow,
     <T as Deref>::Target: ToOwned + 'cow,
