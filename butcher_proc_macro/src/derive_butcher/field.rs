@@ -416,7 +416,7 @@ impl ButcheringMethod {
             ButcheringMethod::Rebutcher => {
                 quote! {
                     #ty : Butcher< #lt > + ToOwned<Owned = #ty > + #lt,
-                    <#ty as butcher::Butcher< #lt >>:: Output: Clone,
+                    <#ty as butcher::Butcher< #lt >>:: Output: Clone
                 }
             }
             ButcheringMethod::Regular => quote! { #ty: Clone },

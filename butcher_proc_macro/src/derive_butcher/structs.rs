@@ -93,18 +93,12 @@ impl ButcheredStruct {
         let butchered_struct = self.expand_butchered_struct(&lt);
         let butchered_struct_trait = self.expand_butchered_struct_trait(&lt);
 
-        let a = quote! {
+        quote! {
             #( #fields_expansion )*
 
             #butchered_struct_trait
             #butchered_struct
-        };
-
-        if self.name == "List" {
-            println!("{}", a);
         }
-
-        a
     }
 
     fn expand_butchered_struct(&self, lt: &TokenStream) -> TokenStream {
