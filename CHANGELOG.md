@@ -1,3 +1,10 @@
+# 0.5.1 (August 03 2020)
+
+This release fixes a bug introduced with the rebutcher butchering method,
+which produced unparseable code.
+
+This release only affects `butcher_proc_macro`.
+
 # 0.5.0 (August 03 2020)
 
 Major traits have been renamed so that they follow more closely the rust `std`
