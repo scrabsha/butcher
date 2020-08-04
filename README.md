@@ -16,8 +16,8 @@ An easy way to interact with structs and enums wrapped in [`Cow`][cow].
 ## Concept
 
 The standard library has a [clone on write type][cow], which allows to work
-with data with either owned or borrowed data, without any distinction. However,
-this can lead to a lot of code duplication in some situations.
+with either owned or borrowed data, without any distinction. However, this can
+lead to a lot of code duplication in some situations.
 
 [cow]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
 
@@ -100,7 +100,7 @@ fn print_numbers(elems: Cow<[u32]>) {
 }
 ```
 
-### Flatening
+### Flattening
 
 Thanks to the [`Deref`] trait, it is possible to `flatten` a `Cow<T>` to
 `Cow<<T as Deref>::Target>`. For instance, it is possible to create a `Cow<str>`
