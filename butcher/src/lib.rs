@@ -4,9 +4,9 @@
 //!
 //! This crate provides the following functionalities for data wrapped in `Cow`:
 //!   - [destructuring/pattern matching over structs and enums](#destructuringpattern-matching),
-//!   - [iterating over collections, or any type that implements `IntoIterator`](#iteration),
-//!   - [flattening `Cow`](#flattening),
-//!   - [removing an indirection level `Cow`](#removing-an-indirection-level).
+//!   - [iterating over collections](#iteration),
+//!   - [flattening nested `Cow`](#flattening),
+//!   - [removing an indirection level for data in `Cow`](#removing-an-indirection-level).
 //!
 //! ## Destructuring/pattern matching
 //!
