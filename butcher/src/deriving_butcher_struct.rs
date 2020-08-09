@@ -115,6 +115,9 @@
 //!     c: String,
 //!     #[butcher(unbox)]
 //!     d: Box<Ipv4Addr>,
+//!     # // The following field is hadded so that it is possible to track any
+//!     # // regression for https://github.com/scileo/butcher/issues/7
+//!     # cons: Box<Self>,
 //! }
 //! ```
 //!
