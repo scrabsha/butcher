@@ -8,9 +8,9 @@ use quote::quote;
 
 use proc_macro2::TokenStream;
 
-use crate::utils::{self};
+use crate::utils;
 
-use super::{field::Field, DeriveError};
+use super::{field::Field, utils::create_type_signature, DeriveError};
 
 pub(super) struct ButcheredStruct {
     name: Ident,
@@ -23,6 +23,8 @@ pub(super) struct ButcheredStruct {
 
 impl ButcheredStruct {
     pub(super) fn from(input: DeriveInput) -> Result<ButcheredStruct, syn::Error> {
+        let self_type_signature = create_type_signature(&input);
+
         let name = input.ident;
         let vis = input.vis;
 
@@ -59,7 +61,7 @@ impl ButcheredStruct {
         let fields = fields
             .into_iter()
             .enumerate()
-            .map(|(id, f)| Field::from(f, &generic_types, &lifetimes, id))
+            .map(|(id, f)| Field::from(f, &generic_types, &lifetimes, id, &self_type_signature))
             .fold(Ok(Vec::new()), |acc, res| match (acc, res) {
                 (Ok(mut main), Ok(v)) => {
                     main.push(v);

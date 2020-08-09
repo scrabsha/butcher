@@ -12,7 +12,7 @@ use quote::{quote, ToTokens};
 use proc_macro2::TokenStream;
 
 use crate::{
-    derive_butcher::DeriveError,
+    derive_butcher::{utils::ReplaceSelf, DeriveError},
     utils::{self, FieldName},
 };
 
@@ -44,6 +44,7 @@ impl Field {
         generic_types: &HashSet<Ident>,
         lifetimes: &HashSet<Lifetime>,
         id: usize,
+        main_struct_type: &Type,
     ) -> Result<Field, syn::Error> {
         let FieldMetadata(method, additional_traits) = parse_meta_attrs(input.attrs.as_slice())?;
 
@@ -54,7 +55,10 @@ impl Field {
             .map(FieldName::from)
             .unwrap_or_else(|| FieldName::Unnamed(id));
 
-        let ty = input.ty;
+        let mut ty = input.ty;
+        // Remove Self from ty, because the type referenced by Self changes
+        // between contexts.
+        ty.replace(main_struct_type);
 
         let mut associated_generics = find_generics_in_type(&ty, generic_types)?;
         let mut associated_lifetimes = find_lifetimes_in_type(&ty, lifetimes)?;
