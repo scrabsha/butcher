@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use syn::{
     punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, LifetimeDef,
-    TypeParam, Variant as SVariant, Visibility, WhereClause,
+    Type, TypeParam, Variant as SVariant, Visibility, WhereClause,
 };
 
 use proc_macro2::TokenStream;
@@ -12,6 +12,8 @@ use quote::{format_ident, quote};
 use super::field::Field;
 
 use crate::utils;
+
+use super::utils::create_type_signature;
 
 pub(super) struct ButcheredEnum {
     name: Ident,
@@ -23,6 +25,8 @@ pub(super) struct ButcheredEnum {
 
 impl ButcheredEnum {
     pub(super) fn from(input: DeriveInput) -> Result<ButcheredEnum, syn::Error> {
+        let self_type_signature = create_type_signature(&input);
+
         let name = input.ident;
         let vis = input.vis;
 
@@ -52,7 +56,7 @@ impl ButcheredEnum {
         let variants = data
             .variants
             .into_iter()
-            .map(|v| Variant::from(v, &generic_types, &lifetimes))
+            .map(|v| Variant::from(v, &generic_types, &lifetimes, &self_type_signature))
             .fold(Ok(Vec::new()), |acc, res| match (acc, res) {
                 (Ok(mut xs), Ok(x)) => {
                     xs.push(x);
@@ -247,6 +251,7 @@ impl Variant {
         v: SVariant,
         generic_types: &HashSet<Ident>,
         lifetimes: &HashSet<Lifetime>,
+        enum_type_signature: &Type,
     ) -> Result<Variant, syn::Error> {
         let name = v.ident;
 
@@ -259,7 +264,7 @@ impl Variant {
         let fields = fields
             .into_iter()
             .enumerate()
-            .map(|(id, f)| Field::from(f, &generic_types, &lifetimes, id))
+            .map(|(id, f)| Field::from(f, &generic_types, &lifetimes, id, enum_type_signature))
             .fold(Ok(Vec::new()), |acc, res| match (acc, res) {
                 (Ok(mut main), Ok(v)) => {
                     main.push(v);

@@ -10,6 +10,7 @@ use proc_macro2::TokenStream;
 mod enums;
 mod field;
 mod structs;
+mod utils;
 
 use enums::ButcheredEnum;
 use structs::ButcheredStruct;

@@ -89,6 +89,16 @@ pub(crate) fn global_associated_struct_name(initial_struct: &Ident) -> Ident {
 }
 
 #[cfg(test)]
+macro_rules! assert_eq_tt {
+    ($left: ident, $right: ident) => {
+        let left = format!("{}", quote::quote! { #$left });
+        let right = format!("{}", quote::quote! { #$right });
+
+        assert_eq!(left, right);
+    };
+}
+
+#[cfg(test)]
 mod associated_struct_name {
     use super::*;
 
