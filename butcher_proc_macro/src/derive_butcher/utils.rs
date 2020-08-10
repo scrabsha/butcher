@@ -1,9 +1,9 @@
 use std::iter::{self, FromIterator};
 
 use syn::{
-    punctuated::Punctuated, AngleBracketedGenericArguments, Binding, Constraint, DeriveInput,
-    GenericArgument, GenericParam, Ident, LifetimeDef, ParenthesizedGenericArguments, Path,
-    PathArguments, PathSegment, ReturnType, Token, Type, TypeParam, TypeParamBound, TypePath,
+    punctuated::Punctuated, AngleBracketedGenericArguments, DeriveInput, GenericArgument,
+    GenericParam, Ident, LifetimeDef, Path, PathArguments, PathSegment, Token, Type, TypeParam,
+    TypePath,
 };
 
 use proc_macro2::TokenStream;
@@ -48,30 +48,60 @@ macro_rules! impl_replace_self_struct {
     }
 }
 
-impl ReplaceSelf for Type {
-    fn replace(&mut self, rep: &Type) {
-        match self {
-            Type::Array(v) => v.replace(rep),
-            Type::BareFn(bf) => bf.replace(rep),
-            Type::Group(g) => g.replace(rep),
-            Type::ImplTrait(it) => it.replace(rep),
-            Type::Infer(i) => i.replace(rep),
-            Type::Macro(m) => m.replace(rep),
-            Type::Never(n) => n.replace(rep),
-            Type::Paren(p) => p.replace(rep),
-            Type::Path(TypePath { path, .. }) if path.is_ident("Self") => {
-                *self = rep.clone();
+macro_rules! impl_replace_self_enum {
+    (
+        $self_kw:ident,
+        $rep:ident,
+        $(
+            $ty:ident {
+                $(
+                    $pat:pat $( if $cond:expr )? => {
+                        $( $fun:expr ),* $(,)?
+                    }
+                ),* $(,)?
             }
-            Type::Path(p) => p.replace(rep),
-            Type::Ptr(p) => p.replace(rep),
-            Type::Reference(r) => r.replace(rep),
-            Type::Slice(s) => s.replace(rep),
-            Type::TraitObject(to) => to.replace(rep),
-            Type::Tuple(t) => t.replace(rep),
-            Type::Verbatim(v) => v.replace(rep),
-            _ => unimplemented!(),
+        ),* $(,)?
+    ) => {
+        $(
+            impl_replace_self_enum!(
+                @single_type
+                $self_kw,
+                $rep,
+                $ty {
+                    $(
+                        $pat $( if $cond )? => {
+                            $( $fun ),*
+                        }
+                    ),*
+                }
+            );
+        )*
+    };
+    (
+        @single_type
+        $self_kw:ident,
+        $rep:ident,
+        $ty:ident {
+            $(
+                $pat:pat $( if $cond:expr )? => {
+                    $( $fun:expr ),* $(,)?
+                }
+            ),* $(,)?
         }
-    }
+    ) => {
+        impl ReplaceSelf for syn::$ty {
+            fn replace(&mut $self_kw, $rep: &Type) {
+                use syn::$ty::*;
+                match $self_kw {
+                    $(
+                        $pat $( if $cond)? => {
+                            $( $fun; )*
+                        },
+                    )*
+                }
+            }
+        }
+    };
 }
 
 impl_replace_self_struct! {
@@ -143,59 +173,89 @@ impl_replace_self_struct! {
         elems => elems.iter_mut().for_each(|ty| ty.replace(rep)),
     },
 
+    Binding {
+        ty => ty.replace(rep),
+    },
+
+    Constraint {
+        bounds => bounds.iter_mut().for_each(|b| b.replace(rep)),
+    },
+
+    AngleBracketedGenericArguments {
+        args => args.iter_mut().for_each(|arg| arg.replace(rep)),
+    },
+
+    ParenthesizedGenericArguments {
+        inputs => inputs.iter_mut().for_each(|ty| ty.replace(rep)),
+        output => output.replace(rep),
+    },
+
     TypeInfer {},
     TypeMacro {},
     TypeNever {},
 }
 
-impl ReplaceSelf for ReturnType {
-    fn replace(&mut self, rep: &Type) {
-        if let ReturnType::Type(_, ty) = self {
-            ty.replace(rep);
-        }
-    }
-}
+impl_replace_self_enum! {
+    self,
+    rep,
 
-impl ReplaceSelf for TypeParamBound {
-    fn replace(&mut self, rep: &Type) {
-        if let TypeParamBound::Trait(tb) = self {
-            tb.replace(rep);
-        }
-    }
-}
+    Type {
+        Array(v) => { v.replace(rep) },
+        BareFn(bf) => { bf.replace(rep) },
+        Group(g) => { g.replace(rep) },
+        ImplTrait(it) => { it.replace(rep) },
+        Infer(i) => { i.replace(rep) },
+        Macro(m) => { m.replace(rep) },
+        // The case in which we have to replace Self with something.
+        Path(TypePath { path, .. }) if path.is_ident("Self") => {
+            *self = rep.clone(),
+        },
+        // Other non-Self path.
+        Path(p) => { p.replace(rep) },
+        Ptr(p) => { p.replace(rep) },
+        Reference(r) => { r.replace(rep) },
+        Slice(s) => { s.replace(rep) },
+        TraitObject(to) => { to.replace(rep) },
+        Tuple(t) => { t.replace(rep) },
+        Verbatim(v) => { v.replace(rep) },
+        _ => { unimplemented!() },
+    },
 
-impl ReplaceSelf for PathArguments {
-    fn replace(&mut self, rep: &Type) {
-        match self {
-            PathArguments::None => {}
-            PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) => {
-                args.iter_mut().for_each(|arg| arg.replace(rep))
-            }
-            PathArguments::Parenthesized(ParenthesizedGenericArguments {
-                inputs, output, ..
-            }) => {
-                inputs.iter_mut().for_each(|ty| ty.replace(rep));
-                output.replace(rep);
-            }
-        }
-    }
-}
+    ReturnType {
+        Type(_,ty) => {
+            ty.replace(rep),
+        },
+        _ => {},
+    },
 
-impl ReplaceSelf for GenericArgument {
-    fn replace(&mut self, rep: &Type) {
-        match self {
-            GenericArgument::Lifetime(_) | GenericArgument::Const(_) => {}
-            GenericArgument::Type(t) => t.replace(rep),
-            GenericArgument::Binding(Binding { ty, .. }) => ty.replace(rep),
-            GenericArgument::Constraint(Constraint { bounds, .. }) => {
-                bounds.iter_mut().for_each(|b| b.replace(rep))
-            }
-        }
+    TypeParamBound {
+        Trait(tb) => { tb.replace(rep) },
+        _ => {},
+    },
+
+    PathArguments {
+        None => {},
+        AngleBracketed(args) => { args.replace(rep) },
+        Parenthesized(args) => { args.replace(rep) },
+    },
+
+    GenericArgument {
+        Lifetime(_) => {},
+        Const(_) => {},
+        Type(t) => { t.replace(rep) },
+        Binding(b) => { b.replace(rep) },
+        Constraint(c) => { c.replace(rep) },
     }
 }
 
 impl ReplaceSelf for TokenStream {
     fn replace(&mut self, _rep: &Type) {}
+}
+
+impl<T: ReplaceSelf, U> ReplaceSelf for Punctuated<T, U> {
+    fn replace(&mut self, rep: &Type) {
+        self.iter_mut().for_each(|t| t.replace(rep));
+    }
 }
 
 pub(super) fn create_type_signature(input: &DeriveInput) -> Type {
