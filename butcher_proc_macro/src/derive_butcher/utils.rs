@@ -112,7 +112,7 @@ impl_replace_self_struct! {
     },
 
     TypeBareFn {
-        inputs => inputs.iter_mut().for_each(|arg| arg.replace(rep)),
+        inputs => inputs.replace(rep),
         output => output.replace(rep),
     },
 
@@ -125,7 +125,7 @@ impl_replace_self_struct! {
     },
 
     TypeImplTrait {
-        bounds => bounds.iter_mut().for_each(|b| b.replace(rep)),
+        bounds => bounds.replace(rep),
     },
 
     TraitBound {
@@ -133,7 +133,7 @@ impl_replace_self_struct! {
     },
 
     Path {
-        segments => segments.iter_mut().for_each(|s| s.replace(rep)),
+        segments => segments.replace(rep),
     },
 
     PathSegment {
@@ -166,11 +166,11 @@ impl_replace_self_struct! {
     },
 
     TypeTraitObject {
-        bounds => bounds.iter_mut().for_each(|bound| bound.replace(rep)),
+        bounds => bounds.replace(rep),
     },
 
     TypeTuple {
-        elems => elems.iter_mut().for_each(|ty| ty.replace(rep)),
+        elems => elems.replace(rep),
     },
 
     Binding {
@@ -178,15 +178,15 @@ impl_replace_self_struct! {
     },
 
     Constraint {
-        bounds => bounds.iter_mut().for_each(|b| b.replace(rep)),
+        bounds => bounds.replace(rep),
     },
 
     AngleBracketedGenericArguments {
-        args => args.iter_mut().for_each(|arg| arg.replace(rep)),
+        args => args.replace(rep),
     },
 
     ParenthesizedGenericArguments {
-        inputs => inputs.iter_mut().for_each(|ty| ty.replace(rep)),
+        inputs => inputs.replace(rep),
         output => output.replace(rep),
     },
 
