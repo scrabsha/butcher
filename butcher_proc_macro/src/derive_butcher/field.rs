@@ -12,7 +12,10 @@ use quote::{quote, ToTokens};
 use proc_macro2::TokenStream;
 
 use crate::{
-    derive_butcher::{utils::ReplaceSelf, DeriveError},
+    derive_butcher::{
+        utils::{FindGenerics, ReplaceSelf},
+        DeriveError,
+    },
     utils::{self, FieldName},
 };
 
@@ -60,7 +63,7 @@ impl Field {
         // between contexts.
         ty.replace(main_struct_type);
 
-        let mut associated_generics = find_generics_in_type(&ty, generic_types)?;
+        let mut associated_generics = ty.find_generics(generic_types);
         let mut associated_lifetimes = find_lifetimes_in_type(&ty, lifetimes)?;
 
         associated_generics.sort_unstable();
