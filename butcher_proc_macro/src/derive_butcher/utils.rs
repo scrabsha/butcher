@@ -344,7 +344,7 @@ fn generic_param(generic_param: GenericParam) -> Option<GenericArgument> {
     }
 }
 
-trait FindGenerics {
+pub(super) trait FindGenerics {
     fn find_generics(&self, generics: &HashSet<Ident>) -> Vec<Ident>;
 }
 
