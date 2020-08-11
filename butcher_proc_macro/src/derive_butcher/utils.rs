@@ -1,4 +1,7 @@
-use std::iter::{self, FromIterator};
+use std::{
+    collections::HashSet,
+    iter::{self, FromIterator},
+};
 
 use syn::{
     punctuated::Punctuated, AngleBracketedGenericArguments, DeriveInput, GenericArgument,
@@ -341,6 +344,188 @@ fn generic_param(generic_param: GenericParam) -> Option<GenericArgument> {
     }
 }
 
+trait FindGenerics {
+    fn find_generics(&self, generics: &HashSet<Ident>) -> Vec<Ident>;
+}
+
+macro_rules! impl_find_generics_struct {
+    (
+        @single_type
+        $generics:ident,
+        $ty:ident { $($var:ident),* $(,)? } => { $( $fun:expr ),* $(,)? } $(,)?
+    ) => {
+        impl FindGenerics for syn::$ty {
+            fn find_generics(&self, $generics: &HashSet<Ident>) -> Vec<Ident> {
+                let syn::$ty { $($var,)* .. } = self;
+                std::iter::empty()
+                    $( .chain($fun) )*
+                    .collect::<Vec<_>>()
+            }
+        }
+    };
+
+    (
+        $generics:ident,
+        $(
+            $ty:ident { $($var:ident),* $(,)? } => { $( $fun:expr ),* $(,)? }
+        ),* $(,)?
+    ) => {
+        $(
+            impl_find_generics_struct!(
+                @single_type
+                $generics,
+                $ty { $($var),* } => { $($fun),* },
+            );
+        )*
+    }
+}
+
+macro_rules! impl_find_generics_enum {
+    (
+        @single_type
+        $generics:ident,
+        $ty:ident { $(
+                $pat:pat => { $( $fun:expr ),* $(,)? }
+        ),* $(,)? } $(,)?
+    ) => {
+        impl FindGenerics for syn::$ty {
+            fn find_generics(&self, $generics: &HashSet<Ident>) -> Vec<Ident> {
+                use syn::$ty::*;
+
+                match self {
+                    $(
+                        $pat => {
+                            std::iter::empty()
+                                $( .chain($fun) )*
+                                .collect::<Vec<_>>()
+                        },
+                    )*
+                }
+            }
+        }
+    };
+
+    (
+        $generics:ident,
+        $(
+            $ty:ident { $(
+                    $pat:pat => { $( $fun:expr ),* $(,)? }
+            ),* $(,)? }
+        ),* $(,)?
+    ) => {
+        $(
+            impl_find_generics_enum!(
+                @single_type
+                $generics,
+                $ty { $($pat => { $($fun),* }),* },
+            );
+        )*
+    };
+}
+
+impl_find_generics_struct! {
+    gs,
+    TypeArray { elem } => { elem.as_ref().find_generics(gs) },
+    TypeBareFn { inputs, output } => { inputs.find_generics(gs), output.find_generics(gs) },
+    BareFnArg { ty } => { ty.find_generics(gs) },
+    TypeGroup { elem } => { elem.as_ref().find_generics(gs) },
+    TypeImplTrait { bounds } => { bounds.find_generics(gs) },
+    TraitBound { path } => { path.find_generics(gs) },
+    Path { segments } => { segments.find_generics(gs) },
+    PathSegment { ident, arguments } => {
+        ident.find_generics(gs),
+        arguments.find_generics(gs),
+    },
+    AngleBracketedGenericArguments { args } => { args.find_generics(gs) },
+    Binding { ident, ty } => {
+        ident.find_generics(gs),
+        ty.find_generics(gs),
+    },
+    Constraint { ident, bounds } => {
+        ident.find_generics(gs),
+        bounds.find_generics(gs),
+    },
+    ParenthesizedGenericArguments { inputs, output } => {
+        inputs.find_generics(gs),
+        output.find_generics(gs),
+    },
+    TypeParen { elem } => { elem.find_generics(gs) },
+    TypePath { qself, path } => {
+        qself.find_generics(gs),
+        path.find_generics(gs),
+    },
+    QSelf { ty } => { ty.find_generics(gs) },
+    TypePtr { elem } => { elem.find_generics(gs) },
+    TypeReference { elem } => { elem.find_generics(gs) },
+    TypeSlice { elem } => { elem.find_generics(gs) },
+    TypeTraitObject { bounds } => { bounds.find_generics(gs) },
+    TypeTuple { elems } => { elems.find_generics(gs) },
+}
+
+impl_find_generics_enum! {
+    gs,
+    Type {
+        Array(ta) => { ta.find_generics(gs) },
+        BareFn(tbf) => { tbf.find_generics(gs) },
+        Group(tg) => { tg.find_generics(gs) },
+        ImplTrait(tit) => { tit.find_generics(gs) },
+        Infer(_) => {},
+        Macro(_) => {},
+        Never(_) => {},
+        Paren(tp) => { tp.find_generics(gs) },
+        Path(tp) => { tp.find_generics(gs) },
+        Ptr(tptr) => { tptr.find_generics(gs) },
+        Reference(tr) => { tr.find_generics(gs) },
+        Slice(ts) => { ts.find_generics(gs) },
+        TraitObject(tto) => { tto.find_generics(gs) },
+        Tuple(tt) => { tt.find_generics(gs) },
+        Verbatim(_) => {},
+        _ => {},
+    },
+    ReturnType {
+        Default => {},
+        Type(_, t) => { t.as_ref().find_generics(gs) },
+    },
+    TypeParamBound {
+        Trait(t) => { t.find_generics(gs) },
+        Lifetime(_) => {},
+    },
+    PathArguments {
+        None => {},
+        AngleBracketed(ab) => { ab.find_generics(gs) },
+        Parenthesized(p) => { p.find_generics(gs) },
+    },
+    GenericArgument {
+        Lifetime(_) => {},
+        Type(t) => { t.find_generics(gs) },
+        Binding(b) => { b.find_generics(gs) },
+        Constraint(c) => { c.find_generics(gs) },
+        Const(_) => {},
+    },
+}
+
+impl<T: FindGenerics, U> FindGenerics for Punctuated<T, U> {
+    fn find_generics(&self, gs: &HashSet<Ident>) -> Vec<Ident> {
+        self.iter().flat_map(|t| t.find_generics(gs)).collect()
+    }
+}
+
+impl<T: FindGenerics> FindGenerics for Option<T> {
+    fn find_generics(&self, gs: &HashSet<Ident>) -> Vec<Ident> {
+        self.iter().flat_map(|t| t.find_generics(gs)).collect()
+    }
+}
+
+impl FindGenerics for Ident {
+    fn find_generics(&self, gs: &HashSet<Ident>) -> Vec<Ident> {
+        if gs.contains(self) {
+            vec![self.clone()]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
 #[cfg(test)]
 macro_rules! test_replace_self {
     ($rep:ty, $left:ty, $right:ty) => {
@@ -445,5 +630,76 @@ mod generic_param {
     #[test]
     fn does_not_hangle_consts() {
         test_generic_param!(None, const LENGTH: usize);
+    }
+}
+
+macro_rules! test_find_generics {
+    (@make_ident $i:ident) => {
+        {
+            let tmp: syn::Ident = syn::parse_quote! { $i };
+            tmp
+        }
+    };
+    ( { $($gen:ident),* $(,)? }, $ty:ty => [ $($found_gen:ident),* $(,)? ] $(,)? ) => {
+        let gs = {
+            #[allow(unused_mut)]
+            let mut tmp = HashSet::new();
+            $(
+                let id = test_find_generics!(@make_ident $gen);
+                tmp.insert(id);
+            )*
+            tmp
+        };
+
+        let ty: Type = syn::parse_quote! { $ty };
+
+        let left = ty.find_generics(&gs);
+
+        let right: Vec<syn::Ident> = {
+            #[allow(unused_mut)]
+            let mut tmp = Vec::new();
+            $(
+                let id = test_find_generics!(@make_ident $found_gen);
+                tmp.push(id);
+            )*
+            tmp
+        };
+
+        assert_eq!(left, right);
+    };
+}
+
+#[cfg(test)]
+mod find_generics {
+    use super::*;
+
+    #[test]
+    fn simple() {
+        test_find_generics! { {}, Foo => [] };
+
+        test_find_generics! { { A, B, C, D }, A => [A] };
+
+        test_find_generics! { { A }, A => [A] };
+    }
+
+    #[test]
+    fn in_path() {
+        test_find_generics! { { A, B, C }, Vec<A, B> => [A, B] };
+
+        test_find_generics! { { T, E, F }, Result<T, E> => [T, E] };
+    }
+
+    #[test]
+    fn in_impl_trait() {
+        test_find_generics! { { A, B }, impl Iterator<Item = (A, B)> => [A, B] };
+
+        test_find_generics! { { A, B, C, D }, impl AsRef<A> => [A] };
+    }
+
+    #[test]
+    fn in_fn() {
+        test_find_generics! { { A, B, C }, fn(A) -> C => [A, C] };
+
+        test_find_generics! { { A, B, C }, fn() -> B => [B] };
     }
 }
