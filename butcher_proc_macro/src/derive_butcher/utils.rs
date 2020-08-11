@@ -633,6 +633,7 @@ mod generic_param {
     }
 }
 
+#[cfg(test)]
 macro_rules! test_find_generics {
     (@make_ident $i:ident) => {
         {
