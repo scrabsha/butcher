@@ -53,7 +53,7 @@ impl ButcheredStruct {
                 generic_types.insert(t.ident);
             }
             GenericParam::Lifetime(lt) => {
-                lifetimes.insert(lt.lifetime);
+                lifetimes.insert(lt.lifetime.ident);
             }
             GenericParam::Const(_) => {}
         });

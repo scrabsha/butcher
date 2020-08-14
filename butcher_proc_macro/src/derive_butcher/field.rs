@@ -13,7 +13,7 @@ use proc_macro2::TokenStream;
 
 use crate::{
     derive_butcher::{
-        utils::{FindGenerics, ReplaceSelf},
+        utils::{FindGenerics, FindLifetimes, ReplaceSelf},
         DeriveError,
     },
     utils::{self, FieldName},
@@ -45,7 +45,7 @@ impl Field {
     pub(super) fn from(
         input: syn::Field,
         generic_types: &HashSet<Ident>,
-        lifetimes: &HashSet<Lifetime>,
+        lifetimes: &HashSet<Ident>,
         id: usize,
         main_struct_type: &Type,
     ) -> Result<Field, syn::Error> {
@@ -64,7 +64,7 @@ impl Field {
         ty.replace(main_struct_type);
 
         let mut associated_generics = ty.find_generics(generic_types);
-        let mut associated_lifetimes = find_lifetimes_in_type(&ty, lifetimes)?;
+        let mut associated_lifetimes = ty.find_lifetimes(lifetimes);
 
         associated_generics.sort_unstable();
         associated_lifetimes.sort_unstable();

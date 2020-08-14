@@ -48,7 +48,7 @@ impl ButcheredEnum {
                 generic_types.insert(t.ident);
             }
             GenericParam::Lifetime(lt) => {
-                lifetimes.insert(lt.lifetime);
+                lifetimes.insert(lt.lifetime.ident);
             }
             GenericParam::Const(_) => {}
         });
@@ -250,7 +250,7 @@ impl Variant {
     fn from(
         v: SVariant,
         generic_types: &HashSet<Ident>,
-        lifetimes: &HashSet<Lifetime>,
+        lifetimes: &HashSet<Ident>,
         enum_type_signature: &Type,
     ) -> Result<Variant, syn::Error> {
         let name = v.ident;
