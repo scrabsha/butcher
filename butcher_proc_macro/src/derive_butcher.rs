@@ -20,9 +20,6 @@ pub enum DeriveError {
     FoundUnion,
     FoundUnitStruct,
     MultipleButcheringMethod,
-    FoundImplTrait,
-    FoundMacroAsType,
-    FoundTraitObject,
     UnknownMethod,
 }
 
@@ -34,9 +31,6 @@ impl Display for DeriveError {
             DeriveError::MultipleButcheringMethod => {
                 "Multiple butchering method provided. Choose one!"
             }
-            DeriveError::FoundImplTrait => "Butcher does not support impl Trait",
-            DeriveError::FoundMacroAsType => "Butcher does not support macro as type",
-            DeriveError::FoundTraitObject => "Butcher does not support trait objects",
             DeriveError::UnknownMethod => "Unknown butchering method",
         }
         .fmt(f)

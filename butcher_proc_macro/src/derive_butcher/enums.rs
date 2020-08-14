@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use syn::{
-    punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, LifetimeDef,
+    punctuated::Punctuated, Data, DeriveInput, Fields, GenericParam, Ident, LifetimeDef,
     Type, TypeParam, Variant as SVariant, Visibility, WhereClause,
 };
 

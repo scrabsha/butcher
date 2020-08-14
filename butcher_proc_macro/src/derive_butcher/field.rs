@@ -2,9 +2,7 @@ use std::{collections::HashSet, iter};
 
 use syn::{
     parse::{Parse, ParseStream},
-    AngleBracketedGenericArguments, Attribute, GenericArgument, Ident, Lifetime, PathArguments,
-    QSelf, Result as SynResult, ReturnType, Token, Type, TypeArray, TypeBareFn, TypeGroup,
-    TypeParen, TypePath, TypePtr, TypeReference, TypeSlice, TypeTuple, Visibility,
+    Attribute, Ident, Lifetime, Result as SynResult, Token, Type, Visibility,
 };
 
 use quote::{quote, ToTokens};
@@ -242,93 +240,6 @@ impl Parse for FieldMetadata {
 
         Ok(FieldMetadata(method, traits))
     }
-}
-
-fn find_lifetimes_in_type(ty: &Type, lts: &HashSet<Lifetime>) -> Result<Vec<Lifetime>, syn::Error> {
-    match ty {
-        Type::Array(TypeArray { elem, .. })
-        | Type::Group(TypeGroup { elem, .. })
-        | Type::Paren(TypeParen { elem, .. })
-        | Type::Ptr(TypePtr { elem, .. })
-        | Type::Slice(TypeSlice { elem, .. }) => find_lifetimes_in_type(elem.as_ref(), lts),
-
-        Type::Reference(TypeReference { lifetime, elem, .. }) => {
-            let mut found_lifetimes = match lifetime {
-                Some(lt) if lts.contains(lt) => vec![lt.clone()],
-                Some(_) | None => Vec::new(),
-            };
-
-            found_lifetimes.extend(find_lifetimes_in_type(elem.as_ref(), lts)?);
-
-            Ok(found_lifetimes)
-        }
-
-        Type::Tuple(TypeTuple { elems, .. }) => elems
-            .into_iter()
-            .map(|ty| find_lifetimes_in_type(ty, lts))
-            .try_fold(Vec::new(), extend_discovered),
-
-        Type::BareFn(TypeBareFn { inputs, output, .. }) => {
-            let mut found_lifetimes = inputs
-                .into_iter()
-                .map(|arg| find_lifetimes_in_type(&arg.ty, lts))
-                .try_fold(Vec::new(), extend_discovered)?;
-
-            if let ReturnType::Type(_, ty) = output {
-                found_lifetimes.extend(find_lifetimes_in_type(ty.as_ref(), lts)?);
-            }
-
-            Ok(found_lifetimes)
-        }
-
-        Type::Path(TypePath { path, qself }) => {
-            let mut found_lifetimes = path
-                .segments
-                .iter()
-                .filter_map(|s| match &s.arguments {
-                    PathArguments::None | PathArguments::Parenthesized(_) => None,
-                    PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        args, ..
-                    }) => Some(args),
-                })
-                .flatten()
-                .filter_map(|arg| match arg {
-                    GenericArgument::Lifetime(lt) if lts.contains(lt) => Some(Ok(vec![lt.clone()])),
-                    GenericArgument::Type(ty) => Some(find_lifetimes_in_type(ty, lts)),
-                    _ => None,
-                })
-                .try_fold(Vec::new(), extend_discovered)?;
-
-            if let Some(QSelf { ty, .. }) = qself {
-                found_lifetimes.extend(find_lifetimes_in_type(ty.as_ref(), lts)?);
-            }
-
-            Ok(found_lifetimes)
-        }
-
-        Type::ImplTrait(tit) => Err(syn::Error::new_spanned(tit, DeriveError::FoundImplTrait)),
-
-        Type::Macro(m) => Err(syn::Error::new_spanned(m, DeriveError::FoundMacroAsType)),
-
-        Type::TraitObject(to) => Err(syn::Error::new_spanned(to, DeriveError::FoundTraitObject)),
-
-        // For the next three arms, the compiler is going to raise an error
-        // anyway.
-        Type::Infer(_) => Ok(Vec::new()),
-        Type::Never(_) => Ok(Vec::new()),
-        Type::Verbatim(_) => Ok(Vec::new()),
-
-        _ => panic!("Unknown type met"),
-    }
-}
-
-fn extend_discovered<T>(
-    mut discovered: Vec<T>,
-    to_add: Result<Vec<T>, syn::Error>,
-) -> Result<Vec<T>, syn::Error> {
-    let to_add = to_add?;
-    discovered.extend(to_add);
-    Ok(discovered)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
