@@ -5,8 +5,8 @@ use std::{
 
 use syn::{
     punctuated::Punctuated, AngleBracketedGenericArguments, DeriveInput, GenericArgument,
-    GenericParam, Ident, LifetimeDef, Path, PathArguments, PathSegment, Token, Type, TypeParam,
-    TypePath,
+    GenericParam, Ident, Lifetime, LifetimeDef, Path, PathArguments, PathSegment, Token, Type,
+    TypeParam, TypePath,
 };
 
 use proc_macro2::TokenStream;
@@ -425,45 +425,69 @@ macro_rules! impl_find_generics_enum {
 
 impl_find_generics_struct! {
     gs,
+
     TypeArray { elem } => { elem.as_ref().find_generics(gs) },
-    TypeBareFn { inputs, output } => { inputs.find_generics(gs), output.find_generics(gs) },
+
+    TypeBareFn { inputs, output } => {
+        inputs.find_generics(gs),
+        output.find_generics(gs),
+    },
+
     BareFnArg { ty } => { ty.find_generics(gs) },
+
     TypeGroup { elem } => { elem.as_ref().find_generics(gs) },
+
     TypeImplTrait { bounds } => { bounds.find_generics(gs) },
+
     TraitBound { path } => { path.find_generics(gs) },
+
     Path { segments } => { segments.find_generics(gs) },
+
     PathSegment { ident, arguments } => {
         ident.find_generics(gs),
         arguments.find_generics(gs),
     },
+
     AngleBracketedGenericArguments { args } => { args.find_generics(gs) },
+
     Binding { ident, ty } => {
         ident.find_generics(gs),
         ty.find_generics(gs),
     },
+
     Constraint { ident, bounds } => {
         ident.find_generics(gs),
         bounds.find_generics(gs),
     },
+
     ParenthesizedGenericArguments { inputs, output } => {
         inputs.find_generics(gs),
         output.find_generics(gs),
     },
+
     TypeParen { elem } => { elem.find_generics(gs) },
+
     TypePath { qself, path } => {
         qself.find_generics(gs),
         path.find_generics(gs),
     },
+
     QSelf { ty } => { ty.find_generics(gs) },
+
     TypePtr { elem } => { elem.find_generics(gs) },
+
     TypeReference { elem } => { elem.find_generics(gs) },
+
     TypeSlice { elem } => { elem.find_generics(gs) },
+
     TypeTraitObject { bounds } => { bounds.find_generics(gs) },
+
     TypeTuple { elems } => { elems.find_generics(gs) },
 }
 
 impl_find_generics_enum! {
     gs,
+
     Type {
         Array(ta) => { ta.find_generics(gs) },
         BareFn(tbf) => { tbf.find_generics(gs) },
@@ -482,19 +506,23 @@ impl_find_generics_enum! {
         Verbatim(_) => {},
         _ => {},
     },
+
     ReturnType {
         Default => {},
         Type(_, t) => { t.as_ref().find_generics(gs) },
     },
+
     TypeParamBound {
         Trait(t) => { t.find_generics(gs) },
         Lifetime(_) => {},
     },
+
     PathArguments {
         None => {},
         AngleBracketed(ab) => { ab.find_generics(gs) },
         Parenthesized(p) => { p.find_generics(gs) },
     },
+
     GenericArgument {
         Lifetime(_) => {},
         Type(t) => { t.find_generics(gs) },
@@ -523,6 +551,225 @@ impl FindGenerics for Ident {
         } else {
             Vec::new()
         }
+    }
+}
+
+pub(super) trait FindLifetimes {
+    fn find_lifetimes(&self, lts: &HashSet<Ident>) -> Vec<Lifetime>;
+}
+
+macro_rules! impl_find_lifetimes_struct {
+    (
+        @single_type
+        $lts_ident:ident,
+        $ty:ident { $($field:ident),* $(,)? } => { $($fun:expr),* $(,)? } $(,)?
+    ) => {
+        impl FindLifetimes for syn::$ty {
+            #[allow(unused_variables)]
+            fn find_lifetimes(&self, $lts_ident: &HashSet<Ident>) -> Vec<Lifetime> {
+                let syn::$ty { $($field,)* .. } = self;
+                std::iter::empty()
+                    $(.chain($fun))*
+                    .collect()
+            }
+        }
+    };
+
+    (
+        $lts_ident:ident,
+        $(
+            $ty:ident { $($field:ident),* $(,)? } => { $($fun:expr),* $(,)? }
+        ),* $(,)?
+    ) => {
+        $(
+            impl_find_lifetimes_struct! {
+                @single_type
+                $lts_ident,
+                $ty { $($field),* } => { $($fun),* },
+            }
+        )*
+    }
+}
+
+macro_rules! impl_find_lifetimes_enum {
+    (
+        @single_type
+        $lts_ident:ident,
+        $ty:ident {
+            $(
+                $pat:pat $( if $cond:expr )? => { $($fun:expr),* $(,)? }
+            ),* $(,)?
+
+        } $(,)?
+    ) => {
+        impl FindLifetimes for syn::$ty {
+            fn find_lifetimes(&self, $lts_ident: &HashSet<Ident>) -> Vec<Lifetime> {
+                use syn::$ty::*;
+                match self {
+                    $(
+                        $pat $( if $cond )? => {
+                            std::iter::empty()
+                                $( .chain($fun) )*
+                                .collect()
+                        },
+                    )*
+                }
+            }
+        }
+    };
+
+    (
+        $lts_ident:ident,
+        $(
+            $ty:ident {
+                $(
+                    $pat:pat $( if $cond:expr)? => { $($fun:expr),* $(,)? }
+                ),* $(,)?
+            }
+        ),* $(,)?
+    ) => {
+        $(
+            impl_find_lifetimes_enum! {
+                @single_type
+                $lts_ident,
+                $ty {
+                    $( $pat $( if $cond )? => { $($fun),* } ),*
+                },
+            }
+        )*
+    }
+}
+
+impl_find_lifetimes_struct! {
+    lts,
+
+    TypeArray { elem } => { elem.as_ref().find_lifetimes(lts) },
+
+    TypeBareFn { inputs, output } => {
+        inputs.find_lifetimes(lts),
+        output.find_lifetimes(lts),
+    },
+
+    BareFnArg { ty } => { ty.find_lifetimes(lts) },
+
+    TypeGroup { elem } => { elem.as_ref().find_lifetimes(lts) },
+
+    TypeImplTrait { bounds } => { bounds.find_lifetimes(lts) },
+
+    TraitBound { path } => { path.find_lifetimes(lts) },
+
+    Path { segments } => { segments.find_lifetimes(lts) },
+
+    PathSegment { arguments } => { arguments.find_lifetimes(lts) },
+
+    AngleBracketedGenericArguments { args } => { args.find_lifetimes(lts) },
+
+    Binding { ty } => { ty.find_lifetimes(lts) },
+
+    Constraint { bounds } => { bounds.find_lifetimes(lts) },
+
+    ParenthesizedGenericArguments { inputs, output } => {
+        inputs.find_lifetimes(lts),
+        output.find_lifetimes(lts),
+    },
+
+    TypeInfer {} => {},
+
+    TypeMacro {} => {},
+
+    TypeNever {} => {},
+
+    TypeParen { elem } => { elem.as_ref().find_lifetimes(lts) },
+
+    TypePath { qself, path } => {
+        qself.find_lifetimes(lts),
+        path.find_lifetimes(lts),
+    },
+
+    QSelf { ty } => { ty.as_ref().find_lifetimes(lts) },
+
+    TypePtr { elem } => { elem.as_ref().find_lifetimes(lts) },
+
+    TypeReference { elem, lifetime } => {
+        lifetime.find_lifetimes(lts),
+        elem.as_ref().find_lifetimes(lts)
+    },
+
+    TypeSlice { elem } => { elem.as_ref().find_lifetimes(lts) },
+
+    TypeTraitObject { bounds } => { bounds.find_lifetimes(lts) },
+
+    TypeTuple { elems } => { elems.find_lifetimes(lts) },
+}
+
+impl_find_lifetimes_enum! {
+    lts,
+
+    Type {
+        Array(ta) => { ta.find_lifetimes(lts) },
+        BareFn(tbf) => { tbf.find_lifetimes(lts) },
+        Group(tg) => { tg.find_lifetimes(lts) },
+        ImplTrait(tit) => { tit.find_lifetimes(lts) },
+        Infer(ti) => { ti.find_lifetimes(lts) },
+        Macro(tm) => { tm.find_lifetimes(lts) },
+        Never(tn) => { tn.find_lifetimes(lts) },
+        Paren(tp) => { tp.find_lifetimes(lts) },
+        Path(tp) => { tp.find_lifetimes(lts) },
+        Ptr(tp) => { tp.find_lifetimes(lts) },
+        Reference(tr) => { tr.find_lifetimes(lts) },
+        Slice(ts) => { ts.find_lifetimes(lts) },
+        TraitObject(tto) => { tto.find_lifetimes(lts) },
+        Tuple(tt) => { tt.find_lifetimes(lts) },
+        Verbatim(_) => {},
+        _ => {},
+    },
+
+    ReturnType {
+        Default => {},
+        Type(_, ty) => { ty.find_lifetimes(lts) },
+    },
+
+    TypeParamBound {
+        Trait(tb) => { tb.find_lifetimes(lts) },
+        Lifetime(ltb) => { ltb.find_lifetimes(lts) },
+    },
+
+    PathArguments {
+        None => {},
+        AngleBracketed(args) => { args.find_lifetimes(lts) },
+        Parenthesized(args) => { args.find_lifetimes(lts) },
+    },
+
+    GenericArgument {
+        Lifetime(lt) => { lt.find_lifetimes(lts) },
+        Type(t) => { t.find_lifetimes(lts) },
+        Binding(b) => { b.find_lifetimes(lts) },
+        Constraint(c) => { c.find_lifetimes(lts) },
+        Const(_) => {},
+    },
+}
+
+impl<T: FindLifetimes, U> FindLifetimes for Punctuated<T, U> {
+    fn find_lifetimes(&self, lts: &HashSet<Ident>) -> Vec<Lifetime> {
+        self.iter().flat_map(|t| t.find_lifetimes(lts)).collect()
+    }
+}
+
+impl FindLifetimes for Lifetime {
+    fn find_lifetimes(&self, lts: &HashSet<Ident>) -> Vec<Lifetime> {
+        if lts.contains(&self.ident) {
+            vec![self.clone()]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl<T: FindLifetimes> FindLifetimes for Option<T> {
+    fn find_lifetimes(&self, lts: &HashSet<Ident>) -> Vec<Lifetime> {
+        self.as_ref()
+            .map(|t| t.find_lifetimes(lts))
+            .unwrap_or_else(|| Vec::new())
     }
 }
 
@@ -702,5 +949,60 @@ mod find_generics {
         test_find_generics! { { A, B, C }, fn(A) -> C => [A, C] };
 
         test_find_generics! { { A, B, C }, fn() -> B => [B] };
+    }
+}
+
+#[cfg(test)]
+macro_rules! test_find_lifetimes {
+    (
+        { $($lt:ident),* $(,)? }, $ty:ty => [ $($found_lt:ident),* $(,)?] $(,)?
+    ) => {
+        let lts = {
+            #[allow(unused_mut)]
+            let mut tmp = HashSet::new();
+            $(
+                let lt: Ident = syn::parse_quote! { $lt };
+                tmp.insert(lt);
+            )*
+            tmp
+        };
+
+        let ty: Type = syn::parse_quote! { $ty };
+        let left = ty.find_lifetimes(&lts);
+
+        let right = {
+            #[allow(unused_mut)]
+            let mut tmp: Vec<Ident> = Vec::new();
+            $(
+                let found_lt: Ident = syn::parse_quote! { $found_lt };
+                tmp.push(found_lt);
+            )*
+            tmp
+        };
+        let test_is_correct = left.iter().map(|lt| &lt.ident).eq(&right);
+
+        assert!(test_is_correct)
+    };
+}
+
+#[cfg(test)]
+mod find_lifetimes {
+    use super::*;
+
+    #[test]
+    fn simple() {
+        test_find_lifetimes! { {}, () => [] };
+        test_find_lifetimes! { { a }, &'a str => [a] };
+    }
+
+    #[test]
+    fn in_impl_trait() {
+        test_find_lifetimes! { { a, b, c }, impl 'a + ToString => [a] };
+    }
+
+    #[test]
+    fn in_path() {
+        test_find_lifetimes! { { a, b, c }, Vec<&'a usize> => [a] };
+        test_find_lifetimes! { { a, b }, Cow<'a, str> => [a] };
     }
 }
